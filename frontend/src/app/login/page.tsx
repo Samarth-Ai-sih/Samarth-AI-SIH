@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
+import { cn } from "@/lib/utils";
 
 const DEMO_ACCOUNTS = [
   { label: "Admin", email: "admin.demo@samarth-demo.in", role: "System Admin" },
@@ -37,23 +38,36 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [activeDemo, setActiveDemo] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) router.replace(params.get("redirect") || "/dashboard");
   }, [isAuthenticated, isLoading, params, router]);
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  async function executeLogin(targetEmail: string, targetPassword: string) {
     setError("");
     setSubmitting(true);
     try {
-      await login(email, password);
+      await login(targetEmail, targetPassword);
       router.push(params.get("redirect") || "/dashboard");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign in was not successful. Please try again.");
     } finally {
       setSubmitting(false);
+      setActiveDemo(null);
     }
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    await executeLogin(email, password);
+  }
+
+  async function handleDemoLogin(accEmail: string, accLabel: string) {
+    setEmail(accEmail);
+    setPassword("Password@123");
+    setActiveDemo(accLabel);
+    await executeLogin(accEmail, "Password@123");
   }
 
   if (isLoading) return <LoadingState label="Checking your session…" />;
@@ -131,25 +145,39 @@ function LoginForm() {
             </form>
 
             <div className="mt-5 border-t border-slate-200 pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">
-                Quick Demo Sign-In
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Quick Demo Sign-In
+                </p>
+                <span className="text-[11px] text-blue-600 font-medium">Click to sign in instantly</span>
+              </div>
               <div className="grid grid-cols-2 gap-1.5">
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    onClick={() => {
-                      setEmail(acc.email);
-                      setPassword("Password@123");
-                      setError("");
-                    }}
-                    className="flex flex-col items-start px-2 py-1.5 text-xs rounded border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 text-left transition-colors"
-                  >
-                    <span className="font-semibold text-slate-800">{acc.label}</span>
-                    <span className="text-[10px] text-slate-500 truncate w-full">{acc.role}</span>
-                  </button>
-                ))}
+                {DEMO_ACCOUNTS.map((acc) => {
+                  const isThisActive = activeDemo === acc.label;
+                  return (
+                    <button
+                      key={acc.email}
+                      type="button"
+                      disabled={submitting}
+                      onClick={() => handleDemoLogin(acc.email, acc.label)}
+                      className={cn(
+                        "flex flex-col items-start px-2.5 py-2 text-xs rounded-lg border transition-all text-left cursor-pointer",
+                        isThisActive
+                          ? "border-blue-500 bg-blue-50 text-blue-900 shadow-sm"
+                          : "border-slate-200 bg-slate-50 hover:bg-blue-50/60 hover:border-blue-300 text-slate-800",
+                        submitting && !isThisActive && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <span className="font-semibold text-slate-800 flex items-center gap-1.5">
+                        {acc.label}
+                        {isThisActive && <span className="inline-block h-2 w-2 rounded-full bg-blue-600 animate-ping" />}
+                      </span>
+                      <span className="text-[10px] text-slate-500 truncate w-full">
+                        {isThisActive ? "Signing in…" : acc.role}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

@@ -142,6 +142,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     const data = await res.json();
+    if (data.csrf_token) {
+      Cookies.set("csrf_token", data.csrf_token, { path: "/", sameSite: "lax" });
+    }
     setState({
       user: data.user,
       accessToken: data.access_token,
