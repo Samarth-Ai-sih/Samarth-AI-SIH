@@ -290,6 +290,27 @@ class EvidenceVerificationService:
             return None
         return _safe_response(EvidenceRecord(**document))
 
+    async def get_evidence_file(
+        self,
+        evidence_id: str,
+        *,
+        jurisdiction_filter: dict[str, Any],
+    ) -> tuple[Optional[Path], str]:
+        document = await self._evidence.find_one({"evidence_id": evidence_id}, {"_id": 0})
+        if not document:
+            return None, ""
+        if not await self.work_in_scope(str(document.get("work_id", "")), jurisdiction_filter):
+            return None, ""
+        storage_ref = str(document.get("storage_reference", "")).strip()
+        if not storage_ref:
+            return None, ""
+        candidate = (LOCAL_EVIDENCE_ROOT.parent / storage_ref).resolve()
+        if not candidate.is_file():
+            candidate = (LOCAL_EVIDENCE_ROOT / storage_ref).resolve()
+        if not candidate.is_file():
+            return None, ""
+        return candidate, str(document.get("media_type") or "image/jpeg")
+
     async def refresh_local_metadata(self, evidence_id: str) -> dict[str, Any]:
         """Re-extract SHA-256, pHash, EXIF, GPS, and capture time for a local asset.
 

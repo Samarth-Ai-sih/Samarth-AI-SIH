@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse
 
 from app.core.config import get_settings
 from app.core.database import Database, get_database
@@ -109,7 +110,7 @@ async def upload_local_demo_evidence(
     settings = get_settings()
     if settings.is_production:
         raise HTTPException(status_code=503, detail="Local evidence storage is disabled in production")
-    if settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET:
+    if settings.is_production and settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET:
         raise HTTPException(status_code=409, detail="Cloudinary is configured; use the signed upload flow")
     service = _service(db)
     work = await _scoped_work_or_404(service, work_id, jurisdiction_filter)
@@ -233,3 +234,21 @@ async def get_evidence(
         details={"work_id": evidence.work_id},
     )
     return evidence
+
+
+@router.get(
+    "/{evidence_id}/file",
+    summary="Download or view private evidence photo (Authorized Authorities)",
+    description="Authorized officials with READ_EVIDENCE can view geotagged ground inspection photos for verification.",
+)
+async def get_evidence_file(
+    evidence_id: str,
+    user: UserInDB = Depends(require_permissions(Permission.READ_EVIDENCE)),
+    jurisdiction_filter: dict = Depends(get_jurisdiction_filter),
+    db: Database = Depends(get_database),
+):
+    path, content_type = await _service(db).get_evidence_file(evidence_id, jurisdiction_filter=jurisdiction_filter)
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="Evidence photo not found or inaccessible")
+    return FileResponse(path, media_type=content_type, filename=path.name)
+

@@ -228,6 +228,8 @@ class InspectionReportResponse(BaseModel):
     inspector_user_id: str
     checklist: InspectionChecklist
     gps_available: bool
+    gps_latitude: Optional[float] = None
+    gps_longitude: Optional[float] = None
     gps_timestamp: Optional[datetime] = None
     gps_distance_from_project_meters: Optional[float] = None
     evidence_ids: list[str]

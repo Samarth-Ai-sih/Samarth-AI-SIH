@@ -464,6 +464,89 @@ class CaseManagementService:
 
         return resolved_case
 
+    async def mark_reviewed_in_progress(
+        self, case_id: str, request: CaseReasonRequest, *, actor: str, **request_context: str
+    ) -> Optional[CaseResponse]:
+        case = await self._case(case_id)
+        if not case or case.status in TERMINAL_STATUSES:
+            return None
+        now = datetime.now(timezone.utc)
+
+        verified_pct = 0
+        if case.inspection_reports:
+            latest_rep = case.inspection_reports[-1]
+            verified_pct = latest_rep.checklist.verified_physical_progress_pct
+
+        case.status = CaseStatus.UNDER_REVIEW
+        updated_case = await self._save_case(
+            case,
+            actor=actor,
+            event_type="inspection_verified_in_progress",
+            reason=request.reason,
+            audit_type=AuditEventType.CASE_UPDATED,
+            details={"verified_progress_pct": str(verified_pct), "review_status": "in_progress"},
+            **request_context,
+        )
+
+        # 1. Synchronize linked citizen report to in_progress
+        try:
+            citizen_col = self._db.get_collection("citizen_issues")
+            c_queries = [{"linked_case_id": case.case_id}]
+            if case.source_id:
+                c_queries.append({"reference_id": str(case.source_id).upper()})
+            await citizen_col.update_many(
+                {"$or": c_queries},
+                {"$set": {
+                    "status": "in_progress",
+                    "public_status_message": f"District Authority verified on-site: Work is actively in progress ({verified_pct}% verified completion). Notes: {request.reason}",
+                    "moderation_reason": f"Ground inspection reviewed by District Authority ({actor}). Work verified in progress. {request.reason}",
+                    "updated_at": now,
+                }}
+            )
+        except Exception as exc:
+            logger.warning("Could not sync citizen issue in_progress: %s", type(exc).__name__)
+
+        # 2. Dispatch notice of review & progress to State Nodal Officer
+        try:
+            sno_users = await self._users.find({
+                "role": UserRole.STATE_NODAL_OFFICER.value,
+                "is_active": True,
+            }, {"_id": 0}).to_list(length=None)
+            recipients = [
+                u for u in sno_users
+                if not u.get("jurisdiction", {}).get("state_code")
+                or str(u.get("jurisdiction", {}).get("state_code", "")).upper() == str(case.state_code or "").upper()
+            ]
+            for sno in recipients:
+                sno_uid = str(sno["user_id"])
+                notif_payload = {
+                    "notification_id": str(uuid4()),
+                    "recipient_user_id": sno_uid,
+                    "case_id": case.case_id,
+                    "work_id": case.work_id,
+                    "title": f"Notice: Ground Inspection Reviewed & Working On It ({case.district_code or case.state_code})",
+                    "message": f"District Authority reviewed on-site inspection for Case {case.case_id[:8]} (Work {case.work_id}): Work is verified in active progress at {verified_pct}%. Notes: {request.reason}",
+                    "read_at": None,
+                    "created_at": now,
+                }
+                await self._notifications.insert_one(dict(notif_payload))
+                try:
+                    await self._workflow_notifications.create_event(
+                        recipient_user_id=sno_uid,
+                        event_type=NotificationEventType.INSPECTION_SUBMITTED,
+                        resource_type="case",
+                        resource_id=case.case_id,
+                        idempotency_key=f"case-reviewed:{case.case_id}:{sno_uid}:{int(now.timestamp())}",
+                        title=notif_payload["title"],
+                        message=notif_payload["message"],
+                    )
+                except Exception as w_exc:
+                    logger.warning("Could not dispatch workflow notification: %s", type(w_exc).__name__)
+        except Exception as exc:
+            logger.warning("Could not notify State Nodal Officer on case review: %s", type(exc).__name__)
+
+        return updated_case or _case_response(case)
+
     async def reject(self, case_id: str, request: CaseReasonRequest, *, actor: str, **request_context: str) -> Optional[CaseResponse]:
         case = await self._case(case_id)
         if not case or case.status in TERMINAL_STATUSES:
@@ -856,6 +939,7 @@ def _report_response(report: InspectionReport) -> InspectionReportResponse:
         report_id=report.report_id, case_id=report.case_id, work_id=report.work_id,
         inspector_user_id=report.inspector_user_id, checklist=report.checklist,
         gps_available=report.gps_latitude is not None and report.gps_longitude is not None,
+        gps_latitude=report.gps_latitude, gps_longitude=report.gps_longitude,
         gps_timestamp=report.gps_timestamp, gps_distance_from_project_meters=report.gps_distance_from_project_meters,
         evidence_ids=report.evidence_ids, remarks=report.remarks, submitted_at=report.submitted_at,
     )

@@ -282,11 +282,17 @@ def build_jurisdiction_filter(
             filters["state_code"] = {"$regex": f"^{escaped_s}$", "$options": "i"}
 
     elif user_role == UserRole.INSPECTOR:
-        if j.assigned_task_ids:
-            filters["task_id"] = {"$in": j.assigned_task_ids}
-        else:
-            # Inspector with no assigned tasks → match nothing
-            filters["_id"] = None
+        if j.district_code:
+            escaped_d = re.escape(j.district_code.strip())
+            filters["district_code"] = {"$regex": f"^{escaped_d}$", "$options": "i"}
+        if j.state_code:
+            escaped_s = re.escape(j.state_code.strip())
+            filters["state_code"] = {"$regex": f"^{escaped_s}$", "$options": "i"}
+        if not j.district_code and not j.state_code:
+            if j.assigned_task_ids:
+                filters["task_id"] = {"$in": j.assigned_task_ids}
+            else:
+                filters["_id"] = None
 
     elif user_role == UserRole.CITIZEN:
         # No internal collection access. The separate public router owns its safe projection.

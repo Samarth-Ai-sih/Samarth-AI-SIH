@@ -66,4 +66,5 @@ ehthumbs.db
 
 # ---------- Private Evidence & Scratch ----------
 private_citizen_evidence/
+backend/data/evidence/
 scratch/

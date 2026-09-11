@@ -568,7 +568,7 @@ export interface InspectionChecklist {
 }
 export interface InspectionReport {
   report_id: string; case_id: string; work_id: string; inspector_user_id: string; checklist: InspectionChecklist;
-  gps_available: boolean; gps_timestamp: string | null; gps_distance_from_project_meters: number | null;
+  gps_available: boolean; gps_latitude?: number | null; gps_longitude?: number | null; gps_timestamp: string | null; gps_distance_from_project_meters: number | null;
   evidence_ids: string[]; remarks: string; submitted_at: string;
 }
 export interface CaseRecord {

@@ -138,20 +138,29 @@ export function InspectionRouteMap({
       {/* Top Header */}
       <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="flex h-6 items-center gap-1.5 rounded-full bg-blue-100 px-2.5 text-xs font-semibold text-blue-700">
-              <Route className="h-3.5 w-3.5" />
-              B-Tree Shortest Path Route
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50/80 px-3 py-1 text-xs font-semibold text-blue-800 shadow-2xs">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-blue-600" />
+              </span>
+              <Route className="h-3.5 w-3.5 text-blue-600" />
+              Spatial B-Tree Shortest Path
             </span>
-            <span className="flex h-6 items-center gap-1 rounded-full bg-slate-100 px-2.5 text-xs font-medium text-slate-600">
-              O(log N) Spatial Index
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100/90 px-2.5 py-1 text-xs font-medium text-slate-700 shadow-2xs">
+              <span className="font-mono text-[11px] font-bold text-slate-900">O(log N)</span>
+              <span>Morton Spatial Index</span>
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+              Order 4 Branching
             </span>
           </div>
-          <h2 className="mt-1 text-base font-bold tracking-tight text-slate-900">
-            Inspection Site Navigation
+          <h2 className="mt-2 text-base font-bold tracking-tight text-slate-900">
+            Ground Inspection Navigation
           </h2>
-          <p className="text-xs text-slate-500">
-            Interactive routing to site coordinates using Spatial B-Tree Morton index + Dijkstra shortest path.
+          <p className="mt-0.5 text-xs text-slate-500">
+            Algorithmic smallest-distance route calculated using Spatial B-Tree quantization + Dijkstra network search.
           </p>
         </div>
 

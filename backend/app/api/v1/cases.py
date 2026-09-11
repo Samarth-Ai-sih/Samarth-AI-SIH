@@ -326,6 +326,18 @@ async def resolve_case(
     return updated
 
 
+@router.post("/{case_id}/mark-in-progress", response_model=CaseResponse)
+async def mark_case_in_progress(
+    case_id: str, body: CaseReasonRequest, request: Request,
+    user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
+):
+    """District Authority reviews field inspection: marks work actively in progress, updates citizen report, and notifies State Nodal Officer."""
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    updated = await service.mark_reviewed_in_progress(case_id, body, actor=user.user_id, **_context(request))
+    if not updated: raise HTTPException(status_code=409, detail="Case is already closed")
+    return updated
+
+
 @router.post("/{case_id}/reject", response_model=CaseResponse)
 async def reject_case(
     case_id: str, body: CaseReasonRequest, request: Request,
