@@ -15,7 +15,9 @@ class CitizenIssueType(str, Enum):
     ASSET_NOT_VISIBLE = "asset_not_visible"
     QUALITY_CONCERN = "quality_concern"
     INCORRECT_INFORMATION = "incorrect_information"
+    DELAY = "delay"
     OTHER = "other"
+
 
 
 class CitizenIssueStatus(str, Enum):

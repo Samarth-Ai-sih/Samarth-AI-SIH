@@ -32,8 +32,8 @@ import {
 } from "lucide-react";
 
 const API = "/api/v1/citizen-reports";
-const WRITERS = new Set(["district_authority"]);
-const AUTHORIZED_ROLES = new Set(["district_authority", "state_nodal_officer", "inspector", "admin"]);
+const WRITERS = new Set(["district_authority", "admin"]);
+const AUTHORIZED_ROLES = new Set(["district_authority", "state_nodal_officer", "inspector", "admin", "mospi"]);
 
 const NEXT: Record<CitizenIssueStatus, CitizenIssueStatus[]> = {
   received: ["under_review", "closed"],
@@ -160,7 +160,8 @@ export default function CitizenReportsPage() {
   const isDistrictAuthority = user?.role === "district_authority";
   const isStateNodalOfficer = user?.role === "state_nodal_officer";
   const isInspector = user?.role === "inspector";
-  const canWrite = isDistrictAuthority;
+  const isMospi = user?.role === "mospi";
+  const canWrite = Boolean(user && WRITERS.has(user.role));
   const isAuthorized = Boolean(user && AUTHORIZED_ROLES.has(user.role));
 
   const load = useCallback(async () => {
@@ -498,14 +499,25 @@ export default function CitizenReportsPage() {
         )}
 
         {isAdmin && (
+          <div style={{ ...s.daBanner, borderColor: "#cbd5e1", background: "#f8fafc" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}>
+              <ShieldCheck size={18} color="#0f172a" />
+              <div style={{ ...s.badgeLabel, color: "#0f172a" }}>SYSTEM ADMINISTRATION · FULL MODERATION & DISPATCH CLEARANCE</div>
+            </div>
+            <p style={{ ...s.bannerText, color: "#334155" }}>
+              You have senior administrative clearance across all jurisdictions. You can review citizen grievances, inspect uploaded evidence photos, moderate statuses, dispatch field inspectors, and escalate complaints to official cases.
+            </p>
+          </div>
+        )}
+
+        {isMospi && (
           <div style={{ ...s.snoBanner, borderColor: "#cbd5e1", background: "#f8fafc" }}>
             <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}>
-              <Eye size={18} color="#475569" />
-              <div style={{ ...s.badgeLabel, color: "#334155" }}>SYSTEM ADMINISTRATION · READ-ONLY PROCESS MONITORING</div>
+              <Building2 size={18} color="#1d4ed8" />
+              <div style={s.badgeLabel}>MOSPI · NATIONAL PROGRAMME OVERSIGHT</div>
             </div>
-            <p style={{ ...s.bannerText, color: "#475569" }}>
-              You are monitoring the citizen social-audit review pipeline and timeline in <strong>read-only observation mode</strong>.
-              Actionable moderation, field inspector assignment, and official case escalation are reserved for Dignified Authorities (District Authority & State Nodal Officer).
+            <p style={s.bannerText}>
+              You have national-level oversight of citizen social-audit trends across all states. Under MoSPI safeguards, raw citizen-uploaded photos are confidential.
             </p>
           </div>
         )}
@@ -823,7 +835,7 @@ export default function CitizenReportsPage() {
                   NEXT[selected.status].length > 0 ? (
                     <div style={s.form}>
                       <h3 style={{ margin: "0.2rem 0 0", color: "#0f172a", fontSize: ".85rem", fontWeight: 700 }}>
-                        District Moderation & Action
+                        {isDistrictAuthority ? "District Moderation & Action" : "Administrative Moderation & Action"}
                       </h3>
 
                       <label style={s.label}>
@@ -918,7 +930,7 @@ export default function CitizenReportsPage() {
                 ) : (
                   <div style={s.readOnlyBox}>
                     <p style={{ margin: 0, color: "#1e40af", fontSize: ".74rem" }}>
-                      ℹ️ You are viewing in <strong>Read-Only Mode</strong>. Only the District Authority has permission to alter status, record resolution remarks, and assign inspectors.
+                      ℹ️ You are viewing in <strong>Read-Only Mode</strong>. Only the District Authority and authorized administrators have permission to alter status, record resolution remarks, and assign inspectors.
                     </p>
                   </div>
                 )}

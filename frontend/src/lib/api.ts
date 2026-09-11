@@ -602,7 +602,7 @@ export interface CaseNotification { notification_id: string; case_id: string; wo
 
 // ── Citizen portal and social audit (Phase 14) ──────────────────
 
-export type CitizenIssueType = "work_not_started" | "work_appears_stopped" | "asset_not_visible" | "quality_concern" | "incorrect_information" | "other";
+export type CitizenIssueType = "work_not_started" | "work_appears_stopped" | "asset_not_visible" | "quality_concern" | "incorrect_information" | "delay" | "other";
 export type CitizenIssueStatus = "received" | "under_review" | "inspection_assigned" | "resolved" | "closed";
 
 export interface PublicWorkSummary {

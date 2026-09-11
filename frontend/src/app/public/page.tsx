@@ -49,6 +49,7 @@ const ISSUE_TYPES: Array<{ value: CitizenIssueType; label: string; description: 
   { value: "quality_concern", label: "Substandard Quality", description: "Defective materials, cracked structures, or safety hazards observed." },
   { value: "asset_not_visible", label: "Asset Not Found", description: "Project recorded as complete on paper, but no asset exists on site." },
   { value: "incorrect_information", label: "Discrepancy / Misreporting", description: "Physical progress or sign board details conflict with reality." },
+  { value: "delay", label: "Project Delay / Lagging", description: "Work timeline has exceeded expected dates or progress is severely delayed." },
   { value: "other", label: "Other Civic Concern", description: "Other community grievances regarding this public expenditure." },
 ];
 

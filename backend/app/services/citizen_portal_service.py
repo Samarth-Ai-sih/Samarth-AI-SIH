@@ -69,6 +69,20 @@ ALLOWED_TRANSITIONS = {
 }
 
 
+def _safe_issue_type(raw: Any) -> CitizenIssueType:
+    try:
+        return CitizenIssueType(str(raw))
+    except (ValueError, KeyError, TypeError):
+        return CitizenIssueType.OTHER
+
+
+def _safe_issue_status(raw: Any) -> CitizenIssueStatus:
+    try:
+        return CitizenIssueStatus(str(raw))
+    except (ValueError, KeyError, TypeError):
+        return CitizenIssueStatus.RECEIVED
+
+
 class CitizenPortalService:
     """Separate public projection and anonymous report persistence service."""
 
@@ -328,12 +342,19 @@ class CitizenPortalService:
         issue = await self._issues.find_one({"reference_id": reference_id.upper()}, {"_id": 0})
         if not issue:
             return None
+        status_enum = _safe_issue_status(issue.get("status"))
         return CitizenIssueTrackingResponse(
-            reference_id=str(issue["reference_id"]), work_id=str(issue["work_id"]), work_title=str(issue.get("work_title", "Public work")),
-            issue_type=CitizenIssueType(issue["issue_type"]), status=CitizenIssueStatus(issue["status"]),
-            status_message=str(issue.get("public_status_message") or STATUS_MESSAGES[CitizenIssueStatus(issue["status"])]),
-            submitted_at=issue["submitted_at"], updated_at=issue["updated_at"], evidence_received=bool(issue.get("evidence")),
+            reference_id=str(issue.get("reference_id", "")),
+            work_id=str(issue.get("work_id", "")),
+            work_title=str(issue.get("work_title", "Public work")),
+            issue_type=_safe_issue_type(issue.get("issue_type")),
+            status=status_enum,
+            status_message=str(issue.get("public_status_message") or STATUS_MESSAGES.get(status_enum, "In progress")),
+            submitted_at=issue.get("submitted_at") or datetime.now(timezone.utc),
+            updated_at=issue.get("updated_at") or datetime.now(timezone.utc),
+            evidence_received=bool(issue.get("evidence")),
         )
+
 
     async def list_for_moderation(
         self,
@@ -529,8 +550,8 @@ class CitizenPortalService:
         issue = await self._issues.find_one({"reference_id": reference_id.upper()}, {"_id": 0})
         if not issue or str(issue.get("work_id")) not in allowed_work_ids:
             return None
-        current = CitizenIssueStatus(issue["status"])
-        if request.status not in ALLOWED_TRANSITIONS[current]:
+        current = _safe_issue_status(issue.get("status"))
+        if request.status not in ALLOWED_TRANSITIONS.get(current, set()):
             raise ValueError(f"Cannot move a citizen report from {current.value} to {request.status.value}")
         if request.status in {CitizenIssueStatus.RESOLVED, CitizenIssueStatus.CLOSED} and not request.reason.strip():
             raise ValueError("A moderation reason is required when resolving or closing a citizen report")
@@ -821,19 +842,19 @@ def _moderation_response(doc: dict[str, Any], viewer_role: str = "") -> CitizenI
 
     return CitizenIssueModerationResponse(
         reference_id=ref_id,
-        work_id=str(doc["work_id"]),
+        work_id=str(doc.get("work_id", "")),
         work_title=str(doc.get("work_title", "Public work")),
-        issue_type=CitizenIssueType(doc["issue_type"]),
+        issue_type=_safe_issue_type(doc.get("issue_type")),
         description=str(doc.get("description", "")),
-        status=CitizenIssueStatus(doc["status"]),
+        status=_safe_issue_status(doc.get("status")),
         public_status_message=str(doc.get("public_status_message", "")),
         location_consent=has_location,
         latitude=float(doc["latitude"]) if has_location and doc.get("latitude") is not None else None,
         longitude=float(doc["longitude"]) if has_location and doc.get("longitude") is not None else None,
         evidence_count=len(evidence_raw),
         assigned_inspector_id=doc.get("assigned_inspector_id"),
-        submitted_at=doc["submitted_at"],
-        updated_at=doc["updated_at"],
+        submitted_at=doc.get("submitted_at") or datetime.now(timezone.utc),
+        updated_at=doc.get("updated_at") or datetime.now(timezone.utc),
         moderation_reason=str(doc.get("moderation_reason", "")),
         evidence_items=evidence_items,
         can_view_images=can_view_images,
