@@ -1,0 +1,612 @@
+{
+  "mongodb": {
+    "collections": {
+      "audit_logs": {
+        "count": 1746,
+        "indexes": [
+          "_id_",
+          "timestamp_1",
+          "user_id_1",
+          "event_type_1",
+          "target_user_id_1",
+          "entity_type_1_entity_id_1"
+        ]
+      },
+      "background_jobs": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "job_id_1",
+          "idempotency_key_1",
+          "job_type_1_created_at_-1",
+          "status_1_updated_at_-1"
+        ]
+      },
+      "case_notifications": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "recipient_user_id_1_created_at_-1"
+        ]
+      },
+      "cases": {
+        "count": 41,
+        "indexes": [
+          "_id_",
+          "case_id_1",
+          "work_id_1_updated_at_-1",
+          "assigned_inspector_id_1_status_1",
+          "state_code_1_district_code_1_status_1"
+        ]
+      },
+      "citizen_issues": {
+        "count": 45,
+        "indexes": [
+          "_id_",
+          "reference_id_1",
+          "work_id_1_updated_at_-1",
+          "status_1_updated_at_-1"
+        ]
+      },
+      "citizen_reports": {
+        "count": 45,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "citizen_verification_challenges": {
+        "count": 2,
+        "indexes": [
+          "_id_",
+          "verification_id_1",
+          "expires_at_1"
+        ]
+      },
+      "compliance_results": {
+        "count": 17358,
+        "indexes": [
+          "_id_",
+          "work_id_1",
+          "rule_code_1",
+          "status_1",
+          "review_status_1",
+          "triggered_at_1"
+        ]
+      },
+      "compliance_rules": {
+        "count": 11,
+        "indexes": [
+          "_id_",
+          "rule_code_1",
+          "rule_code_1_version_-1"
+        ]
+      },
+      "constituencies": {
+        "count": 542,
+        "indexes": [
+          "_id_",
+          "name_normalized_1_state_normalized_1"
+        ]
+      },
+      "duplicate_detection_scans": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "scan_id_1",
+          "created_at_1"
+        ]
+      },
+      "duplicate_work_cases": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "case_id_1",
+          "match_id_1"
+        ]
+      },
+      "duplicate_work_clusters": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "cluster_id_1",
+          "scan_id_1"
+        ]
+      },
+      "duplicate_work_matches": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "match_id_1",
+          "scan_id_1_similarity_score_-1",
+          "left_work_id_1_right_work_id_1",
+          "status_1"
+        ]
+      },
+      "escalations": {
+        "count": 25,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "evidence_duplicate_image_matches": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "pair_key_1",
+          "left_work_id_1_right_work_id_1"
+        ]
+      },
+      "evidence_metadata": {
+        "count": 650,
+        "indexes": [
+          "_id_",
+          "work_id_1_file_hash_1",
+          "evidence_id_1",
+          "verification_schema_version_1_work_id_1_verified_at_-1",
+          "work_id_1_verified_at_-1",
+          "file_hash_1_work_id_1",
+          "perceptual_hash_1",
+          "demo_seed_1"
+        ]
+      },
+      "import_batches": {
+        "count": 2,
+        "indexes": [
+          "_id_",
+          "batch_id_1"
+        ]
+      },
+      "inspection_reports": {
+        "count": 1,
+        "indexes": [
+          "_id_",
+          "report_id_1",
+          "case_id_1_submitted_at_-1",
+          "offline_client_id_1"
+        ]
+      },
+      "inspections": {
+        "count": 18,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "model_predictions": {
+        "count": 1591,
+        "indexes": [
+          "_id_",
+          "prediction_id_1",
+          "work_id_1_prediction_timestamp_-1",
+          "model_version_1"
+        ]
+      },
+      "model_registry": {
+        "count": 2,
+        "indexes": [
+          "_id_",
+          "model_id_1",
+          "model_version_1",
+          "model_type_1_approval_status_1_training_date_-1"
+        ]
+      },
+      "mp_allocations": {
+        "count": 774,
+        "indexes": [
+          "_id_",
+          "data_hash_1",
+          "source_batch_id_1"
+        ]
+      },
+      "mps": {
+        "count": 774,
+        "indexes": [
+          "_id_",
+          "name_normalized_1_house_1_state_normalized_1"
+        ]
+      },
+      "notification_deliveries": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "delivery_id_1",
+          "status_1_created_at_1",
+          "notification_id_1_channel_1"
+        ]
+      },
+      "notification_preferences": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "user_id_1"
+        ]
+      },
+      "notifications": {
+        "count": 0,
+        "indexes": [
+          "_id_",
+          "notification_id_1",
+          "idempotency_key_1",
+          "recipient_user_id_1_created_at_-1",
+          "recipient_user_id_1_read_at_1"
+        ]
+      },
+      "ref_agencies": {
+        "count": 50,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "ref_constituencies": {
+        "count": 83,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "ref_districts": {
+        "count": 46,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "ref_mps": {
+        "count": 83,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "ref_states": {
+        "count": 22,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "risk_scores": {
+        "count": 1578,
+        "indexes": [
+          "_id_",
+          "score_id_1",
+          "operation_key_1",
+          "work_id_1_calculated_at_-1",
+          "risk_tier_1_calculated_at_-1",
+          "composite_score_1"
+        ]
+      },
+      "sanctions": {
+        "count": 1578,
+        "indexes": [
+          "_id_"
+        ]
+      },
+      "sessions": {
+        "count": 56,
+        "indexes": [
+          "_id_",
+          "session_id_1",
+          "user_id_1",
+          "refresh_token_hash_1",
+          "expires_at_1"
+        ]
+      },
+      "states": {
+        "count": 36,
+        "indexes": [
+          "_id_",
+          "name_normalized_1"
+        ]
+      },
+      "users": {
+        "count": 11,
+        "indexes": [
+          "_id_",
+          "user_id_1",
+          "email_1",
+          "username_1",
+          "role_1"
+        ]
+      },
+      "works": {
+        "count": 1578,
+        "indexes": [
+          "_id_",
+          "work_id_1",
+          "status_1",
+          "state_code_1",
+          "district_code_1",
+          "constituency_1",
+          "mp_name_1",
+          "category_1",
+          "created_at_1",
+          "jurisdiction_status_idx",
+          "location.geo_2dsphere",
+          "state_code_1_district_code_1",
+          "category_1_sanctioned_amount_1",
+          "implementing_agency_1_updated_at_-1",
+          "pincode_1",
+          "district_name_1_constituency_1"
+        ]
+      }
+    },
+    "total_collections": 38,
+    "total_documents": 28748
+  },
+  "datasets": [
+    {
+      "filename": "Allocated Limit for Honble MPs (1).csv",
+      "size_bytes": 36148,
+      "row_count": 544,
+      "columns": [
+        "Sr. No.",
+        "State",
+        "Hon'ble Members of Parliaments",
+        "Constituency",
+        "Allocated AMOUNT ( \u20b9 )"
+      ]
+    },
+    {
+      "filename": "Allocated Limit for Honble MPs (2).csv",
+      "size_bytes": 21302,
+      "row_count": 232,
+      "columns": [
+        "Sr. No.",
+        "State",
+        "Hon'ble Members of Parliament",
+        "Elected/Nominated",
+        "Allocated AMOUNT ( \u20b9 )"
+      ]
+    },
+    {
+      "filename": "README.md",
+      "size_bytes": 1025,
+      "row_count": 0,
+      "columns": []
+    }
+  ],
+  "ml_models": [
+    {
+      "filename": "anomaly-iforest-3c6d412bcc6b-dfcb2bca.joblib",
+      "path": "c:\\Users\\ayush\\OneDrive\\Desktop\\SIH\\backend\\model_artifacts\\anomaly-iforest-3c6d412bcc6b-dfcb2bca.joblib",
+      "size_bytes": 3461260,
+      "loadable": true,
+      "type": "dict",
+      "details": {
+        "keys": [
+          "artifact_format_version",
+          "model",
+          "model_type",
+          "model_version",
+          "feature_columns",
+          "feature_schema",
+          "dataset_version",
+          "training_metrics",
+          "reference_profile",
+          "decision_score_calibration"
+        ],
+        "model_type": "IsolationForest"
+      }
+    },
+    {
+      "filename": "delay-xgb-3c6d412bcc6b-d0afd4fd.joblib",
+      "path": "c:\\Users\\ayush\\OneDrive\\Desktop\\SIH\\backend\\model_artifacts\\delay-xgb-3c6d412bcc6b-d0afd4fd.joblib",
+      "size_bytes": 346992,
+      "loadable": true,
+      "type": "dict",
+      "details": {
+        "keys": [
+          "artifact_format_version",
+          "model",
+          "model_type",
+          "model_version",
+          "feature_columns",
+          "feature_schema",
+          "dataset_version",
+          "training_as_of",
+          "training_metrics",
+          "global_feature_importance"
+        ],
+        "model_type": "XGBClassifier"
+      }
+    }
+  ],
+  "role_and_api_tests": {
+    "logins": {
+      "admin": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzZjkwZWEwNS0yZjcwLTQ3YzMtYTgyYi04MWQyNzk5ODQ3YTciLCJzaWQiOiI2MTFiZDQzYi04NGQ1LTQzZTItODIyNy1lYzA3ZWVkMTAxMzEiLCJleHAiOjE3ODkwNjgxODksImlhdCI6MTc4OTA2NjM4OSwidHlwZSI6ImFjY2VzcyJ9.kV-jgF4gHk8SUfEhOFQhIBssMOfuy75f8WjJBDgMfK8",
+        "refresh_token": null,
+        "role": "admin",
+        "scope": "full_country",
+        "login_success": true
+      },
+      "mospi": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNzkxOTVhMC00YTM4LTQxNDMtYWE5Ni0yYjcxZGY3ODFkN2MiLCJzaWQiOiIzNDA2NzBiOC01OTVmLTQwYmQtODcyNy1mODg1OTZhMjNjYjgiLCJleHAiOjE3ODkwNjgxOTAsImlhdCI6MTc4OTA2NjM5MCwidHlwZSI6ImFjY2VzcyJ9.h89gkGwi7tRudtXIiaYO7bc_Zer9-VhM16mdZetLu2Y",
+        "refresh_token": null,
+        "role": "mospi",
+        "scope": "full_country",
+        "login_success": true
+      },
+      "sno_up": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjZTNkZDE0Ny1mZmI1LTQ2MTMtYWRjMy05ZTU1NTIwNTcyZDciLCJzaWQiOiIwYzdkMjY2Mi1kNzAyLTQyYTgtODQ1OS0wODNjYTFmM2M2YjciLCJleHAiOjE3ODkwNjgxOTAsImlhdCI6MTc4OTA2NjM5MCwidHlwZSI6ImFjY2VzcyJ9.wJbbfBo6mlhpK4as6-gNdsBtakpwovKtIFp1xBf2Tr8",
+        "refresh_token": null,
+        "role": "state_nodal_officer",
+        "scope": "state_UP",
+        "login_success": true
+      },
+      "da_lucknow": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkYjU2NzkxYS04MGM0LTQ0MGQtYTAzMS05YmM3N2RkZDZiNmIiLCJzaWQiOiI5M2U3NDhjMy1lNTlmLTQ4NTUtYWZlZC1mMjEyNTRlODE5MjciLCJleHAiOjE3ODkwNjgxOTAsImlhdCI6MTc4OTA2NjM5MCwidHlwZSI6ImFjY2VzcyJ9.3rrllP5Zrj2mCowXW_BkLScIs8ELZfW_HHdzzMdQWhA",
+        "refresh_token": null,
+        "role": "district_authority",
+        "scope": "district_UP_LKO",
+        "login_success": true
+      },
+      "mp_varanasi": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxZWFjODk0NS02ODQ5LTRkNTYtYmIyMC02OGIyMmNiMGNhMDgiLCJzaWQiOiJkODVjZGE5MC04ZGNhLTQwZjMtODJiOC03N2ZlZWExZTJmZTUiLCJleHAiOjE3ODkwNjgxOTAsImlhdCI6MTc4OTA2NjM5MCwidHlwZSI6ImFjY2VzcyJ9.32E8AqWGibzL_K5IJG0iOGgIZ-Jxaabe_nlOXWVMawE",
+        "refresh_token": null,
+        "role": "mp",
+        "scope": "constituency_VARANASI",
+        "login_success": true
+      },
+      "inspector_lucknow": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyNGUwMTY2Yi01Y2VmLTRiZGEtOGQzYS0yMmZhZTlkNTFjNDMiLCJzaWQiOiJjNjM5NzFmMi0zZjZhLTQ4MjMtOWIwNy01OTQwMDUyYjUwZmQiLCJleHAiOjE3ODkwNjgxOTEsImlhdCI6MTc4OTA2NjM5MSwidHlwZSI6ImFjY2VzcyJ9.uBfjoolbPeTeFkMHYCDGYRbosIyA912HkyMKwD-zAUc",
+        "refresh_token": null,
+        "role": "inspector",
+        "scope": "assigned_tasks_only",
+        "login_success": true
+      },
+      "agency_delhi": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJlOWUyYjY1OC1hZDNiLTQ1YjMtODRlMS1kZTc3NTk3NWUwN2EiLCJzaWQiOiIzNDQwMzIxMS0zMTAyLTRlYzYtYTBiNi03MmEwNWM0NjdkYzEiLCJleHAiOjE3ODkwNjgxOTEsImlhdCI6MTc4OTA2NjM5MSwidHlwZSI6ImFjY2VzcyJ9.JPuWaU12ONwEve3Rvq9ej_bvDSjLv4R3PWzZTauYjyQ",
+        "refresh_token": null,
+        "role": "agency",
+        "scope": "agency_scope",
+        "login_success": true
+      },
+      "citizen": {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhMTdhMjFhYi0wOGZiLTQ3YWMtODA0Ny0wM2M5NWNhOWVjOGEiLCJzaWQiOiJiNDQ0MmI4MS01MzY0LTQ4ZDEtODVjMy04NGRhNTIzOGE3MzUiLCJleHAiOjE3ODkwNjgxOTEsImlhdCI6MTc4OTA2NjM5MSwidHlwZSI6ImFjY2VzcyJ9.8F1sLBeGK6g3UOWdFwfCcf5SNCqtG9Ob3aGgDWqupEA",
+        "refresh_token": null,
+        "role": "citizen",
+        "scope": "public_only",
+        "login_success": true
+      }
+    },
+    "scoping": {
+      "admin": {
+        "works_count": 1578,
+        "cases_count": 41,
+        "risk_count": 1578,
+        "fin_status": 200,
+        "map_markers": 100,
+        "user_admin_access": 200
+      },
+      "mospi": {
+        "works_count": 1578,
+        "cases_count": 41,
+        "risk_count": 1578,
+        "fin_status": 200,
+        "map_markers": 100,
+        "user_admin_access": 403
+      },
+      "sno_up": {
+        "works_count": 77,
+        "cases_count": 3,
+        "risk_count": 77,
+        "fin_status": 200,
+        "map_markers": 77,
+        "user_admin_access": 403
+      },
+      "da_lucknow": {
+        "works_count": 33,
+        "cases_count": 3,
+        "risk_count": 403,
+        "fin_status": 200,
+        "map_markers": 33,
+        "user_admin_access": 403
+      },
+      "mp_varanasi": {
+        "works_count": 26,
+        "cases_count": 403,
+        "risk_count": 26,
+        "fin_status": 200,
+        "map_markers": 26,
+        "user_admin_access": 403
+      },
+      "inspector_lucknow": {
+        "works_count": 0,
+        "cases_count": 403,
+        "risk_count": 403,
+        "fin_status": 200,
+        "map_markers": 3,
+        "user_admin_access": 403
+      },
+      "agency_delhi": {
+        "works_count": 17,
+        "cases_count": 403,
+        "risk_count": 403,
+        "fin_status": 200,
+        "map_markers": 17,
+        "user_admin_access": 403
+      },
+      "citizen": {
+        "works_count": 403,
+        "cases_count": 403,
+        "risk_count": 403,
+        "fin_status": 403,
+        "map_markers": 403,
+        "user_admin_access": 403
+      }
+    },
+    "ml_live_inference_samples": [
+      {
+        "work_id": "f0d74f86-9084-4f33-b0e1-b4388227856f",
+        "title": "Pipeline Extension to Ward 23",
+        "status": "SUCCESS",
+        "inference_source": "approved_model_artifact",
+        "model_version": "delay=delay-xgb-3c6d412bcc6b-d0afd4fd;anomaly=anomaly-iforest-3c6d412bcc6b-dfcb2bca",
+        "delay_probability": 0.009948,
+        "anomaly_score": 30.0352
+      },
+      {
+        "work_id": "713796c5-3784-4089-b95c-831e5dd4b2d7",
+        "title": "Cremation Ground Development",
+        "status": "SUCCESS",
+        "inference_source": "approved_model_artifact",
+        "model_version": "delay=delay-xgb-3c6d412bcc6b-d0afd4fd;anomaly=anomaly-iforest-3c6d412bcc6b-dfcb2bca",
+        "delay_probability": 0.109279,
+        "anomaly_score": 54.4075
+      },
+      {
+        "work_id": "9bcd9025-3705-4308-963f-2b7b19a957ec",
+        "title": "LED Street Lighting (150 poles)",
+        "status": "SUCCESS",
+        "inference_source": "approved_model_artifact",
+        "model_version": "delay=delay-xgb-3c6d412bcc6b-d0afd4fd;anomaly=anomaly-iforest-3c6d412bcc6b-dfcb2bca",
+        "delay_probability": 0.012872,
+        "anomaly_score": 70.8467
+      },
+      {
+        "work_id": "046a6c2d-f5f5-42a3-929f-026fcf49f9bb",
+        "title": "Veterinary Dispensary Construction",
+        "status": "SUCCESS",
+        "inference_source": "approved_model_artifact",
+        "model_version": "delay=delay-xgb-3c6d412bcc6b-d0afd4fd;anomaly=anomaly-iforest-3c6d412bcc6b-dfcb2bca",
+        "delay_probability": 0.022927,
+        "anomaly_score": 63.5427
+      },
+      {
+        "work_id": "6c1ab39b-f7d3-4ca1-b06f-1284ac3f0f81",
+        "title": "Solid Waste Management Centre",
+        "status": "SUCCESS",
+        "inference_source": "approved_model_artifact",
+        "model_version": "delay=delay-xgb-3c6d412bcc6b-d0afd4fd;anomaly=anomaly-iforest-3c6d412bcc6b-dfcb2bca",
+        "delay_probability": 0.049945,
+        "anomaly_score": 51.1853
+      }
+    ],
+    "idor_tests": [
+      {
+        "test": "SNO (UP) querying Maharashtra works (?state_code=MH)",
+        "status_code": 200,
+        "works_returned": 0,
+        "passed": true
+      },
+      {
+        "test": "District Authority (Lucknow) querying Varanasi works (?district_code=UP-VNS)",
+        "status_code": 200,
+        "works_returned": 0,
+        "passed": true
+      },
+      {
+        "test": "Citizen trying to read internal evidence registry (/api/v1/evidence)",
+        "status_code": 403,
+        "passed": true
+      },
+      {
+        "test": "MP attempting to deactivate admin user (/api/v1/users/admin-user/status)",
+        "status_code": 403,
+        "passed": true
+      },
+      {
+        "test": "Inspector accessing unassigned case (/api/v1/cases/assigned/CASE-UNASSIGNED-999/task)",
+        "status_code": 404,
+        "passed": true
+      }
+    ]
+  }
+}
