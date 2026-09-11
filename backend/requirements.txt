@@ -1,0 +1,53 @@
+# SAMARTH AI — Backend Dependencies
+# FastAPI + async stack
+
+# --- Web framework ---
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+python-multipart==0.0.20
+
+# --- Database ---
+motor==3.7.1
+pymongo[srv]==4.12.1
+dnspython==2.7.0
+
+# --- Redis ---
+redis==5.3.0
+
+# --- Celery ---
+celery[redis]==5.5.2
+
+# --- Auth ---
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.4.0
+bcrypt==4.3.0
+
+# --- Validation ---
+pydantic==2.11.3
+pydantic-settings==2.9.1
+email-validator==2.2.0
+
+# --- Cloudinary ---
+cloudinary==1.42.1
+
+# --- Data processing ---
+pandas==2.3.0
+numpy==2.3.0
+Pillow==11.1.0
+
+# --- Machine learning (Phase 9) ---
+scikit-learn==1.6.1
+xgboost==2.1.4
+shap==0.46.0
+joblib==1.4.2
+
+# --- Logging ---
+python-json-logger==3.3.0
+
+# --- Testing ---
+pytest==8.4.1
+pytest-asyncio==1.0.0
+httpx==0.28.1
+
+# --- Utilities ---
+python-dotenv==1.1.0
