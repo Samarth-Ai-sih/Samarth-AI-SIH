@@ -1,0 +1,77 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  /* Keep Inter as the preferred UI face without making an offline build
+     depend on a Google Fonts request. */
+  --font-inter: Inter, "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  --font-geist-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter);
+}
+
+* { border-color: #e2e8f0; }
+button, input, select, textarea { font: inherit; }
+::selection { background: #e2e8f0; color: #0f172a; }
+.leaflet-container { font-family: var(--font-inter); }
+
+/* Standardize workflow screens into a clean light surface */
+.dashboard-surface > main > div > :is(main, div)[style] {
+  background: #ffffff !important;
+  color: #334155 !important;
+  font-family: var(--font-inter) !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] [style] {
+  border-color: #e2e8f0 !important;
+  color: #334155 !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] [style*="background"] {
+  background-color: #ffffff !important;
+  background-image: none !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] :is(h1, h2, h3, strong)[style],
+.dashboard-surface > main > div > :is(main, div)[style] :is(h1, h2, h3, strong) {
+  color: #0f172a !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] :is(p, span, td, label, li)[style] {
+  color: #475569 !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] :is(input, select, textarea)[style] {
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] button[style] {
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
+.dashboard-surface > main > div > :is(main, div)[style] button[style]:hover:not(:disabled) {
+  background: #f8fafc !important;
+}
+
+.citizen-portal {
+  background: #ffffff !important;
+  color: #334155 !important;
+  font-family: var(--font-inter) !important;
+}
+.citizen-portal [style] { border-color: #e2e8f0 !important; color: #334155 !important; }
+.citizen-portal [style*="background"] { background-color: #ffffff !important; background-image: none !important; }
+.citizen-portal :is(h1, h2, h3, strong)[style], .citizen-portal :is(h1, h2, h3, strong) { color: #0f172a !important; }
+.citizen-portal :is(p, span, label)[style] { color: #475569 !important; }
+.citizen-portal :is(input, select, textarea)[style] { color: #0f172a !important; background: #ffffff !important; border-color: #cbd5e1 !important; }
+.citizen-portal :is(button, a)[style] { color: #0f172a !important; background: #ffffff !important; border-color: #cbd5e1 !important; }
+.citizen-portal button[style]:hover:not(:disabled), .citizen-portal a[style]:hover { background: #f8fafc !important; }
