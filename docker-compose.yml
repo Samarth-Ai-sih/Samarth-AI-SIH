@@ -1,0 +1,120 @@
+# =============================================
+# SAMARTH AI — Docker Compose (Development)
+#
+# MongoDB Atlas by default. See docker-compose.local.yml for the local-Mongo
+# fallback used by an offline/demo workstation.
+# Services: backend, frontend, redis, celery-worker, celery-beat
+# =============================================
+
+services:
+  # ── Redis ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: samarth-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Backend (FastAPI) ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: samarth-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - ./backend:/app
+      - ./data:/data:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+    restart: unless-stopped
+
+  # ── Celery Worker ────────────────────────────────────────
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: samarth-celery-worker
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A app.celery_app:celery_app worker
+      --loglevel=info
+      --concurrency=2
+      -Q default,scoring,notifications,escalation,evidence
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: samarth-celery-beat
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    volumes:
+      - ./backend:/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A app.celery_app:celery_app beat
+      --loglevel=info
+    restart: unless-stopped
+
+  # ── Frontend (Next.js) ──────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    container_name: samarth-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # Browser calls stay same-origin (/api/*); Next.js proxies them to this
+      # Docker-network hostname rather than to its own localhost.
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local

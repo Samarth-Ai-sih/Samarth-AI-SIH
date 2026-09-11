@@ -1,0 +1,43 @@
+# =============================================
+# SAMARTH AI — Docker Compose (Staging)
+#
+# Override for staging environment.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.staging.yml up
+# =============================================
+
+services:
+  backend:
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 2
+    environment:
+      - ENVIRONMENT=staging
+      - DEBUG=false
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    volumes: []  # No volume mounts in staging
+
+  celery-worker:
+    command: >
+      celery -A app.celery_app:celery_app worker
+      --loglevel=info
+      --concurrency=4
+      -Q default,scoring,notifications,escalation,evidence
+    volumes: []
+
+  celery-beat:
+    command: >
+      celery -A app.celery_app:celery_app beat
+      --loglevel=info
+    volumes: []
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: production
+    environment:
+      - NODE_ENV=production
+    volumes: []

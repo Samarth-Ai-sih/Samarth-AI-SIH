@@ -1,0 +1,52 @@
+# =============================================
+# SAMARTH AI — Local MongoDB Fallback
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+#
+# This is for local development and the synthetic demo only. Production and
+# staging use MongoDB Atlas with a restricted network access list.
+# =============================================
+
+services:
+  mongo:
+    image: mongo:7.0
+    container_name: samarth-mongo-local
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB_NAME: samarth_ai_local
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  celery-worker:
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB_NAME: samarth_ai_local
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  celery-beat:
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB_NAME: samarth_ai_local
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+volumes:
+  mongo_data:
+    driver: local
