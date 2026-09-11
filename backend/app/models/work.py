@@ -237,26 +237,26 @@ class WorkSummaryResponse(BaseModel):
     """Lightweight work summary for list views."""
     work_id: str
     title: str
-    status: WorkStatus
-    category: WorkCategory
+    status: WorkStatus = WorkStatus.RECOMMENDED
+    category: WorkCategory = WorkCategory.OTHER
     state_code: str = ""
-    state_name: str
+    state_name: str = ""
     district_code: str = ""
-    district_name: str
-    constituency: str
+    district_name: str = ""
+    constituency: str = ""
     pincode: str = ""
-    mp_name: str
-    implementing_agency: str
-    sanctioned_amount: float
-    funds_released: float
-    actual_expenditure: float
-    physical_progress_pct: float
+    mp_name: str = ""
+    implementing_agency: str = ""
+    sanctioned_amount: float = 0.0
+    funds_released: float = 0.0
+    actual_expenditure: float = 0.0
+    physical_progress_pct: float = 0.0
     composite_risk_score: Optional[float] = None
     risk_tier: Optional[str] = None
     recommended_date: Optional[datetime] = None
     sanctioned_date: Optional[datetime] = None
     expected_completion_date: Optional[datetime] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
     # Internal work queues can distinguish controlled demo records from
     # operator-entered records without exposing provenance on public routes.
     data_source: str = "operator_entered"
@@ -352,53 +352,53 @@ class WorkDetailResponse(BaseModel):
     # Identity
     work_id: str
     title: str
-    description: str
-    status: WorkStatus
-    category: WorkCategory
-    sub_category: str
+    description: str = ""
+    status: WorkStatus = WorkStatus.RECOMMENDED
+    category: WorkCategory = WorkCategory.OTHER
+    sub_category: str = ""
 
     # Geography
-    state_code: str
-    state_name: str
-    district_code: str
-    district_name: str
-    constituency: str
+    state_code: str = ""
+    state_name: str = ""
+    district_code: str = ""
+    district_name: str = ""
+    constituency: str = ""
     pincode: str = ""
 
     # Stakeholders
-    mp_name: str
-    mp_id: Optional[str]
-    implementing_agency: str
+    mp_name: str = ""
+    mp_id: Optional[str] = None
+    implementing_agency: str = ""
 
     # Financials
-    sanctioned_amount: float
-    funds_released: float
-    actual_expenditure: float
+    sanctioned_amount: float = 0.0
+    funds_released: float = 0.0
+    actual_expenditure: float = 0.0
 
     # Dates
-    recommended_date: Optional[datetime]
-    sanctioned_date: Optional[datetime]
-    start_date: Optional[datetime]
-    expected_completion_date: Optional[datetime]
-    actual_completion_date: Optional[datetime]
+    recommended_date: Optional[datetime] = None
+    sanctioned_date: Optional[datetime] = None
+    start_date: Optional[datetime] = None
+    expected_completion_date: Optional[datetime] = None
+    actual_completion_date: Optional[datetime] = None
 
     # Progress
-    physical_progress_pct: float
+    physical_progress_pct: float = 0.0
 
     # Location
-    location: WorkLocation
+    location: WorkLocation = Field(default_factory=WorkLocation)
 
     # Risk placeholders
-    composite_risk_score: Optional[float]
-    risk_tier: Optional[str]
+    composite_risk_score: Optional[float] = None
+    risk_tier: Optional[str] = None
 
     # Embedded collections
-    payment_tranches: list[PaymentTrancheResponse]
-    progress_updates: list[ProgressUpdateResponse]
-    timeline: list[TimelineEventResponse]
+    payment_tranches: list[PaymentTrancheResponse] = Field(default_factory=list)
+    progress_updates: list[ProgressUpdateResponse] = Field(default_factory=list)
+    timeline: list[TimelineEventResponse] = Field(default_factory=list)
 
     # Metadata
-    created_by: str
-    created_at: datetime
-    updated_at: datetime
+    created_by: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     data_source: str = "operator_entered"
