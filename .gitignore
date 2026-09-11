@@ -1,0 +1,65 @@
+# =========================
+# SAMARTH AI — .gitignore
+# =========================
+
+# ---------- Environment ----------
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+\.venv*/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ---------- Node / Next.js ----------
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# ---------- Docker ----------
+docker-compose.override.yml
+
+# ---------- IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---------- ML artifacts ----------
+*.joblib
+*.pkl
+*.h5
+*.onnx
+models/*.joblib
+
+# ---------- Logs ----------
+*.log
+logs/
+
+# ---------- OS ----------
+desktop.ini
+ehthumbs.db
