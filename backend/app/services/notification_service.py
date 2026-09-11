@@ -40,6 +40,8 @@ SAFE_CONTENT: dict[NotificationEventType, tuple[str, str]] = {
     NotificationEventType.VERIFICATION_REQUEST_ASSIGNED: ("Verification requested", "A project anomaly verification request has been assigned to you."),
     NotificationEventType.CASE_OWNER_ASSIGNED: ("Case assigned", "You have been assigned as owner for a public work case."),
     NotificationEventType.CITIZEN_ISSUE_RAISED: ("New citizen issue reported", "A citizen reported a ground concern for a work in your jurisdiction."),
+    NotificationEventType.CASE_COMPLETED: ("Notice: Case Completed & Resolved", "District Authority has verified field inspection and officially marked the case completed."),
+    NotificationEventType.CASE_RESOLVED: ("Case resolved", "A case in your jurisdiction has been officially resolved."),
 }
 
 

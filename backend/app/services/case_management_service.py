@@ -158,10 +158,15 @@ class CaseManagementService:
         page: int = 1,
         page_size: int = 25,
     ) -> tuple[list[CaseResponse], int, int]:
-        if not assigned_task_ids:
-            return [], 0, 1
+        # Match any case directly assigned to this inspector OR matching their assigned_task_ids
+        or_clauses: list[dict[str, Any]] = [{"assigned_inspector_id": inspector_user_id}]
+        valid_tasks = [t for t in (assigned_task_ids or []) if t]
+        if valid_tasks:
+            or_clauses.append({"case_id": {"$in": valid_tasks}})
+            or_clauses.append({"source_id": {"$in": valid_tasks}})
+
         docs = await self._cases.find(
-            {"case_id": {"$in": assigned_task_ids}, "assigned_inspector_id": inspector_user_id}, {"_id": 0}
+            {"$or": or_clauses}, {"_id": 0}
         ).sort([("due_date", 1), ("updated_at", -1)]).to_list(length=None)
         records = [CaseRecord(**doc) for doc in docs]
         total = len(records)
@@ -182,10 +187,12 @@ class CaseManagementService:
         inspector_user_id: str,
         assigned_task_ids: list[str],
     ) -> Optional[CaseResponse]:
-        if case_id not in assigned_task_ids:
-            return None
         case = await self._case(case_id)
-        if not case or case.assigned_inspector_id != inspector_user_id:
+        if not case:
+            return None
+        valid_tasks = set(assigned_task_ids or [])
+        # Permit access if inspector is directly assigned OR case_id / source_id is in their assigned_task_ids
+        if case.assigned_inspector_id != inspector_user_id and case_id not in valid_tasks and str(case.source_id or "") not in valid_tasks:
             return None
         return _case_response(case)
 
@@ -390,11 +397,72 @@ class CaseManagementService:
         if not case or case.status in TERMINAL_STATUSES:
             return None
         case.closure_reason = request.reason
-        case.resolved_at = datetime.now(timezone.utc)
-        return await self._transition_record(
+        now = datetime.now(timezone.utc)
+        case.resolved_at = now
+        resolved_case = await self._transition_record(
             case, CaseStatus.RESOLVED, actor=actor, reason=request.reason, event_type="case_resolved",
             audit_type=AuditEventType.CASE_RESOLVED, **request_context,
         )
+
+        # 1. Synchronize linked citizen report so citizen sees verified resolution
+        try:
+            citizen_col = self._db.get_collection("citizen_issues")
+            c_queries = [{"linked_case_id": case.case_id}]
+            if case.source_id:
+                c_queries.append({"reference_id": str(case.source_id).upper()})
+            await citizen_col.update_many(
+                {"$or": c_queries},
+                {"$set": {
+                    "status": "resolved",
+                    "public_status_message": f"Inspection verified on-site by District Authority. Case marked completed and resolved. Notes: {request.reason}",
+                    "moderation_reason": f"Field inspection verified and completed by District Authority ({actor}). {request.reason}",
+                    "resolved_at": now,
+                    "updated_at": now,
+                }}
+            )
+        except Exception as exc:
+            logger.warning("Could not sync citizen issue resolution: %s", type(exc).__name__)
+
+        # 2. Dispatch official notice of completion to the State Nodal Officer
+        try:
+            sno_users = await self._users.find({
+                "role": UserRole.STATE_NODAL_OFFICER.value,
+                "is_active": True,
+            }, {"_id": 0}).to_list(length=None)
+            recipients = [
+                u for u in sno_users
+                if not u.get("jurisdiction", {}).get("state_code")
+                or str(u.get("jurisdiction", {}).get("state_code", "")).upper() == str(case.state_code or "").upper()
+            ]
+            for sno in recipients:
+                sno_uid = str(sno["user_id"])
+                notif_payload = {
+                    "notification_id": str(uuid4()),
+                    "recipient_user_id": sno_uid,
+                    "case_id": case.case_id,
+                    "work_id": case.work_id,
+                    "title": f"Notice: Case Completed & Resolved ({case.district_code or case.state_code})",
+                    "message": f"District Authority has verified field inspection and officially marked Case {case.case_id[:8]} (Work {case.work_id}) as COMPLETED. Resolution remarks: {request.reason}",
+                    "read_at": None,
+                    "created_at": now,
+                }
+                await self._notifications.insert_one(dict(notif_payload))
+                try:
+                    await self._workflow_notifications.create_event(
+                        recipient_user_id=sno_uid,
+                        event_type=NotificationEventType.CASE_COMPLETED,
+                        resource_type="case",
+                        resource_id=case.case_id,
+                        idempotency_key=f"case-completed:{case.case_id}:{sno_uid}",
+                        title=notif_payload["title"],
+                        message=notif_payload["message"],
+                    )
+                except Exception as w_exc:
+                    logger.warning("Could not dispatch workflow notification: %s", type(w_exc).__name__)
+        except Exception as exc:
+            logger.warning("Could not notify State Nodal Officer on case completion: %s", type(exc).__name__)
+
+        return resolved_case
 
     async def reject(self, case_id: str, request: CaseReasonRequest, *, actor: str, **request_context: str) -> Optional[CaseResponse]:
         case = await self._case(case_id)
@@ -464,10 +532,11 @@ class CaseManagementService:
         ip_address: str = "",
         user_agent: str = "",
     ) -> Optional[InspectionSubmissionResponse]:
-        if case_id not in assigned_task_ids:
-            return None
         case = await self._case(case_id)
-        if not case or case.assigned_inspector_id != inspector_user_id:
+        if not case:
+            return None
+        valid_tasks = set(assigned_task_ids or [])
+        if case.assigned_inspector_id != inspector_user_id and case_id not in valid_tasks and str(case.source_id or "") not in valid_tasks:
             return None
         if case.status not in {CaseStatus.INSPECTION_ASSIGNED, CaseStatus.EVIDENCE_SUBMITTED}:
             raise ValueError("Inspection report may be submitted only for an assigned inspection")
@@ -792,6 +861,19 @@ def _report_response(report: InspectionReport) -> InspectionReportResponse:
     )
 
 
+def _normalize_district(val: str) -> str:
+    s = (val or "").strip().lower().replace("-", "").replace("_", "")
+    if "lko" in s or "lucknow" in s:
+        return "lucknow"
+    if "delhi" in s or "ndl" in s:
+        return "delhi"
+    if "vns" in s or "varanasi" in s:
+        return "varanasi"
+    if "jpr" in s or "jaipur" in s:
+        return "jaipur"
+    return s
+
+
 def _user_in_case_scope(user: dict[str, Any], state_code: str, district_code: str) -> bool:
     role = str(user.get("role", ""))
     if role in {UserRole.ADMIN.value, UserRole.MOSPI.value}:
@@ -799,8 +881,8 @@ def _user_in_case_scope(user: dict[str, Any], state_code: str, district_code: st
     jurisdiction = user.get("jurisdiction") or {}
     user_state = str(jurisdiction.get("state_code") or "")
     user_district = str(jurisdiction.get("district_code") or "")
-    state_matches = not user_state or user_state.lower() == state_code.lower()
-    district_matches = not user_district or user_district.lower() == district_code.lower()
+    state_matches = not user_state or user_state.lower() == (state_code or "").lower()
+    district_matches = not user_district or not district_code or _normalize_district(user_district) == _normalize_district(district_code)
     return state_matches and district_matches
 
 

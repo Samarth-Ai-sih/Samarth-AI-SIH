@@ -122,6 +122,37 @@ async def get_assigned_inspection_task(
     return task
 
 
+@router.get("/assigned/{case_id}/route", summary="Compute B-Tree shortest path route from inspector position to site coordinates")
+async def get_assigned_inspection_route(
+    case_id: str,
+    start_lat: Optional[float] = Query(default=None),
+    start_lng: Optional[float] = Query(default=None),
+    user: UserInDB = Depends(inspector_dep),
+    db: Database = Depends(get_database),
+):
+    task = await CaseManagementService(db).get_inspection_task(
+        case_id, inspector_user_id=user.user_id, assigned_task_ids=user.jurisdiction.assigned_task_ids,
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Assigned inspection task not found")
+
+    from app.services.routing_service import RoutingService
+
+    site_lat = task.work.location_latitude if task.work.location_latitude is not None else 26.8467
+    site_lng = task.work.location_longitude if task.work.location_longitude is not None else 80.9462
+    s_lat = start_lat if start_lat is not None else 26.8530
+    s_lng = start_lng if start_lng is not None else 80.9420
+
+    routing = RoutingService()
+    return routing.calculate_route(
+        start_lat=s_lat,
+        start_lng=s_lng,
+        target_lat=site_lat,
+        target_lng=site_lng,
+        work_title=task.work.title,
+    )
+
+
 @router.post("/assigned/{case_id}/report", response_model=InspectionSubmissionResponse, status_code=201, summary="Submit an assigned field inspection report")
 async def submit_assigned_inspection_report(
     case_id: str,

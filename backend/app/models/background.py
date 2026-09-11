@@ -75,6 +75,8 @@ class NotificationEventType(str, Enum):
     VERIFICATION_REQUEST_ASSIGNED = "verification_request_assigned"
     CASE_OWNER_ASSIGNED = "case_owner_assigned"
     CITIZEN_ISSUE_RAISED = "citizen_issue_raised"
+    CASE_COMPLETED = "case_completed"
+    CASE_RESOLVED = "case_resolved"
 
 
 class NotificationChannel(str, Enum):

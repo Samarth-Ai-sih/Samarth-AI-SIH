@@ -63,3 +63,7 @@ logs/
 # ---------- OS ----------
 desktop.ini
 ehthumbs.db
+
+# ---------- Private Evidence & Scratch ----------
+private_citizen_evidence/
+scratch/

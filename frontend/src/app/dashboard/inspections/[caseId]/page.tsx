@@ -1,6 +1,6 @@
 "use client";
 
-import { InspectionLocationMap } from "@/components/inspections/InspectionLocationMap";
+import { InspectionRouteMap } from "@/components/inspections/InspectionRouteMap";
 import { useAuth } from "@/lib/auth";
 import {
   EvidenceUploadSignature,
@@ -490,8 +490,54 @@ export default function InspectionTaskPage() {
           <p style={s.mutedSmall}>No photo verification references attached.</p>
         )}
       </section>
-      <section style={s.card}><h2 style={s.sectionTitle}>Inspection remarks and submission</h2><textarea value={remarks} disabled={isSubmitted} onChange={(event) => setRemarks(event.target.value)} style={s.remarks} placeholder="Overall inspection report remarks" /><p style={s.sectionText}>When offline, the report fields and evidence references are saved locally. Photo binaries are never queued in the browser.</p><button onClick={() => void submitReport()} disabled={submitting || isSubmitted} style={s.submit}>{!online ? "Save report offline" : submitting ? "Submitting report…" : "Submit inspection report"}</button></section>
-    </div><aside style={s.mapColumn}><InspectionLocationMap project={project} device={device} /><section style={s.card}><h2 style={s.sectionTitle}>Case status</h2><p style={s.caseStatus}>{task.case.status.replaceAll("_", " ")}</p><p style={s.mutedSmall}>Severity: {task.case.severity}</p><p style={s.mutedSmall}>Due: {formatDateTime(task.case.due_date)}</p></section></aside></section>
+      <section style={s.card}>
+        <h2 style={s.sectionTitle}>Inspection remarks and submission</h2>
+        <textarea
+          value={remarks}
+          disabled={isSubmitted}
+          onChange={(event) => setRemarks(event.target.value)}
+          style={s.remarks}
+          placeholder="Overall inspection report remarks, ground observations, and recommendations for District Authority"
+        />
+        <p style={s.sectionText}>
+          When submitted, the report and geotagged evidence are transmitted directly to the District Authority (Senior) for administrative review and case completion.
+        </p>
+        <button
+          onClick={() => void submitReport()}
+          disabled={submitting || isSubmitted}
+          style={s.submit}
+        >
+          {!online ? "Save report offline" : submitting ? "Transmitting to Senior…" : "Submit Report to Senior (District Authority)"}
+        </button>
+      </section>
+    </div>
+    <aside style={s.mapColumn}>
+      <InspectionRouteMap
+        workId={task.work.work_id}
+        workTitle={task.work.title}
+        targetLatitude={task.work.location_latitude}
+        targetLongitude={task.work.location_longitude}
+        targetAddress={task.work.location_address}
+        deviceLatitude={deviceLocation?.latitude}
+        deviceLongitude={deviceLocation?.longitude}
+        onLocationUpdate={(lat, lng) => {
+          setDeviceLocation({
+            latitude: lat,
+            longitude: lng,
+            timestamp: new Date().toISOString(),
+            accuracy: 10,
+          });
+        }}
+      />
+      <section style={s.card}>
+        <h2 style={s.sectionTitle}>Case status & timeline</h2>
+        <p style={s.caseStatus}>{task.case.status.replaceAll("_", " ")}</p>
+        <p style={s.mutedSmall}>Severity: {task.case.severity.toUpperCase()}</p>
+        <p style={s.mutedSmall}>Due: {task.case.due_date ? formatDateTime(task.case.due_date) : "Not set"}</p>
+        <p style={s.mutedSmall}>Supervising Authority: {task.case.owner_user_id || "District Authority"}</p>
+      </section>
+    </aside>
+  </section>
   </div><style>{`@keyframes inspection-detail-spin{to{transform:rotate(360deg)}} button:hover:not(:disabled),a:hover{opacity:.86}`}</style></main>;
 }
 

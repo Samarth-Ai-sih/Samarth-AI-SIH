@@ -479,7 +479,7 @@ class CitizenPortalService:
                 updates["assigned_inspector_name"] = insp_doc.get("full_name") or insp_doc.get("username")
                 await self._db.get_collection("users").update_one(
                     {"user_id": inspector_id},
-                    {"$addToSet": {"jurisdiction.assigned_task_ids": reference_id.upper()}}
+                    {"$addToSet": {"jurisdiction.assigned_task_ids": {"$each": [case_id, reference_id.upper()]}}}
                 )
         
         await self._issues.update_one({"reference_id": reference_id.upper()}, {"$set": updates})
@@ -559,6 +559,41 @@ class CitizenPortalService:
 
         await self._issues.update_one({"reference_id": reference_id.upper()}, {"$set": updates})
         issue.update(updates)
+
+        if request.status in {CitizenIssueStatus.RESOLVED, CitizenIssueStatus.CLOSED}:
+            linked_case_id = issue.get("linked_case_id")
+            if linked_case_id:
+                try:
+                    await self._db.get_collection("cases").update_one(
+                        {"case_id": linked_case_id},
+                        {"$set": {
+                            "status": "resolved",
+                            "closure_reason": request.reason.strip(),
+                            "resolved_at": now,
+                            "updated_at": now,
+                        }}
+                    )
+                except Exception as exc:
+                    logger.warning("Could not sync case on citizen issue resolution: %s", type(exc).__name__)
+            try:
+                state_c = issue.get("state_code") or ""
+                sno_users = await self._db.get_collection("users").find({
+                    "role": "state_nodal_officer", "is_active": True,
+                }, {"_id": 0}).to_list(length=None)
+                recipients = [u for u in sno_users if not u.get("jurisdiction", {}).get("state_code") or str(u.get("jurisdiction", {}).get("state_code", "")).upper() == str(state_c).upper()]
+                for sno in recipients:
+                    await self._db.get_collection("notifications").insert_one({
+                        "notification_id": str(uuid4()),
+                        "recipient_user_id": str(sno["user_id"]),
+                        "case_id": linked_case_id or "",
+                        "work_id": str(issue.get("work_id", "")),
+                        "title": f"Notice: Citizen Report Resolved ({issue.get('district_name') or 'District'})",
+                        "message": f"District Authority has officially marked Citizen Report {reference_id.upper()} (Work: {str(issue.get('work_title', 'Project'))[:35]}) as RESOLVED. Moderation remarks: {request.reason.strip()}",
+                        "read_at": None,
+                        "created_at": now,
+                    })
+            except Exception as exc:
+                logger.warning("Could not notify State Nodal Officer on citizen issue resolution: %s", type(exc).__name__)
         await self._audit.log_event(
             AuditEventType.CITIZEN_ISSUE_MODERATED, user_id=moderator_user_id, ip_address=ip_address, user_agent=user_agent,
             resource_type="citizen_issue", resource_id=reference_id.upper(),

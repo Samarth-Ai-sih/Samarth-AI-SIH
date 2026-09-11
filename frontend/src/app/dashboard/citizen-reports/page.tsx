@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 
 const API = "/api/v1/citizen-reports";
-const WRITERS = new Set(["district_authority", "admin"]);
+const WRITERS = new Set(["district_authority"]);
 const AUTHORIZED_ROLES = new Set(["district_authority", "state_nodal_officer", "inspector", "admin"]);
 
 const NEXT: Record<CitizenIssueStatus, CitizenIssueStatus[]> = {
@@ -156,10 +156,11 @@ export default function CitizenReportsPage() {
   const [caseNotes, setCaseNotes] = useState("");
   const [escalating, setEscalating] = useState(false);
 
-  const canWrite = Boolean(user && WRITERS.has(user.role));
-  const isDistrictAuthority = user?.role === "district_authority" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
+  const isDistrictAuthority = user?.role === "district_authority";
   const isStateNodalOfficer = user?.role === "state_nodal_officer";
   const isInspector = user?.role === "inspector";
+  const canWrite = isDistrictAuthority;
   const isAuthorized = Boolean(user && AUTHORIZED_ROLES.has(user.role));
 
   const load = useCallback(async () => {
@@ -492,6 +493,19 @@ export default function CitizenReportsPage() {
               District Jurisdiction: <strong>{user.jurisdiction.district_code || "All Districts"}</strong>.
               You have senior clearance to review raw citizen grievance descriptions, <strong>inspect uploaded photo evidence</strong>,
               dispatch field inspectors, and escalate complaints to official Case Management.
+            </p>
+          </div>
+        )}
+
+        {isAdmin && (
+          <div style={{ ...s.snoBanner, borderColor: "#cbd5e1", background: "#f8fafc" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: ".45rem" }}>
+              <Eye size={18} color="#475569" />
+              <div style={{ ...s.badgeLabel, color: "#334155" }}>SYSTEM ADMINISTRATION · READ-ONLY PROCESS MONITORING</div>
+            </div>
+            <p style={{ ...s.bannerText, color: "#475569" }}>
+              You are monitoring the citizen social-audit review pipeline and timeline in <strong>read-only observation mode</strong>.
+              Actionable moderation, field inspector assignment, and official case escalation are reserved for Dignified Authorities (District Authority & State Nodal Officer).
             </p>
           </div>
         )}
