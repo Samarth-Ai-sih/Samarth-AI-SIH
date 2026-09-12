@@ -59,6 +59,18 @@ interface AllocationsResponse {
   reallocation_history: ReallocationRecord[];
 }
 
+function parseApiError(detail: any, fallback: string): string {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join("; ");
+  }
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 export default function InterDistrictAllocationPage() {
   const { user, fetchWithAuth } = useAuth();
   const stateCode = user?.jurisdiction?.state_code || "UP";
@@ -71,6 +83,7 @@ export default function InterDistrictAllocationPage() {
   const [justification, setJustification] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<string | null>(null);
+  const [errorResult, setErrorResult] = useState<string | null>(null);
 
   const { data, isLoading } = useAuthenticatedQuery<AllocationsResponse>(
     ["sno-allocations", stateCode],
@@ -84,15 +97,17 @@ export default function InterDistrictAllocationPage() {
   async function handleReallocate(e: React.FormEvent) {
     e.preventDefault();
     if (!sourceDistrict || !targetDistrict || sourceDistrict === targetDistrict) {
-      alert("Please select different source and destination districts.");
+      setErrorResult("Please select different source and destination districts.");
       return;
     }
     setSubmitting(true);
     setSuccessResult(null);
+    setErrorResult(null);
 
     try {
       const res = await fetchWithAuth("/api/v1/sno/allocations/reallocate", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           source_district_code: sourceDistrict,
           target_district_code: targetDistrict,
@@ -101,8 +116,11 @@ export default function InterDistrictAllocationPage() {
         }),
       });
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.detail || "Failed to execute reallocation.");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errText = parseApiError(body.detail, "Failed to execute reallocation.");
+        throw new Error(errText);
+      }
 
       setSuccessResult(body.message);
       void queryClient.invalidateQueries({ queryKey: ["sno-allocations"] });
@@ -110,10 +128,11 @@ export default function InterDistrictAllocationPage() {
       setTimeout(() => {
         setModalOpen(false);
         setSuccessResult(null);
+        setErrorResult(null);
         setJustification("");
       }, 2200);
     } catch (err: any) {
-      alert(err.message || "Failed to reallocate funds.");
+      setErrorResult(err.message || "Failed to reallocate funds.");
     } finally {
       setSubmitting(false);
     }
@@ -452,6 +471,13 @@ export default function InterDistrictAllocationPage() {
                 />
               </div>
 
+              {errorResult && (
+                <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-800 font-semibold flex items-center gap-2">
+                  <TrendingDown className="h-4 w-4 text-rose-600 shrink-0" />
+                  <span>{errorResult}</span>
+                </div>
+              )}
+
               {successResult ? (
                 <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-emerald-800 font-semibold flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -463,7 +489,11 @@ export default function InterDistrictAllocationPage() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => setModalOpen(false)}
+                    onClick={() => {
+                      setModalOpen(false);
+                      setErrorResult(null);
+                      setSuccessResult(null);
+                    }}
                     disabled={submitting}
                   >
                     Cancel

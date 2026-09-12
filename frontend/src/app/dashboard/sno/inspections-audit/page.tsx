@@ -53,6 +53,18 @@ interface InspectionQuotaAuditResponse {
   districts: DistrictInspectionAudit[];
 }
 
+function parseApiError(detail: any, fallback: string): string {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join("; ");
+  }
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 export default function SNOInspectionAuditPage() {
   const { user, fetchWithAuth } = useAuth();
   const stateCode = user?.jurisdiction?.state_code || "UP";
@@ -71,6 +83,7 @@ export default function SNOInspectionAuditPage() {
     message: string;
     deadline: string;
   } | null>(null);
+  const [errorDirective, setErrorDirective] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useAuthenticatedQuery<InspectionQuotaAuditResponse>(
     ["sno-inspections-audit", stateCode],
@@ -100,6 +113,7 @@ export default function SNOInspectionAuditPage() {
         : `Statutory Vigilance Order: Maintain high-velocity physical inspection standards across high-value works in ${district.district_name}.`
     );
     setSuccessDirective(null);
+    setErrorDirective(null);
   };
 
   const handleIssueDirective = async (e: React.FormEvent) => {
@@ -107,9 +121,11 @@ export default function SNOInspectionAuditPage() {
     if (!selectedDistrict) return;
 
     setSubmitting(true);
+    setErrorDirective(null);
     try {
       const res = await fetchWithAuth("/api/v1/sno/inspections-audit/directive", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           district_code: selectedDistrict.district_code,
           deadline_days: deadlineDays,
@@ -117,23 +133,23 @@ export default function SNOInspectionAuditPage() {
         }),
       });
 
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Failed to issue directive" }));
-        throw new Error(err.detail || "Failed to issue directive");
+        const errText = parseApiError(body.detail, "Failed to issue directive");
+        throw new Error(errText);
       }
 
-      const result = await res.json();
       setSuccessDirective({
-        reference: result.directive_reference,
-        message: result.message,
-        deadline: result.deadline,
+        reference: body.directive_reference,
+        message: body.message,
+        deadline: body.deadline,
       });
 
       // Invalidate queries to refresh numbers
       queryClient.invalidateQueries({ queryKey: ["sno-inspections-audit"] });
       queryClient.invalidateQueries({ queryKey: ["sno-inspections"] });
     } catch (err: any) {
-      alert(`Error issuing inspection directive: ${err.message}`);
+      setErrorDirective(err.message || "Failed to issue directive");
     } finally {
       setSubmitting(false);
     }
@@ -747,12 +763,22 @@ export default function SNOInspectionAuditPage() {
                   <strong>Administrative Notice:</strong> Dispatching this directive initiates a formal compliance tracking ticket for the District Magistrate / DC office. Failure to resolve the deficit by the deadline will trigger automatic escalation to the Central Ministry (MoSPI).
                 </div>
 
+                {errorDirective && (
+                  <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-800 font-semibold flex items-center gap-2 text-xs">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span>{errorDirective}</span>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setSelectedDistrict(null)}
+                    onClick={() => {
+                      setSelectedDistrict(null);
+                      setErrorDirective(null);
+                    }}
                     disabled={submitting}
                     className="text-xs"
                   >

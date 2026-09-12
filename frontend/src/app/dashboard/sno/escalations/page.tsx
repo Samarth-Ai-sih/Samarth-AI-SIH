@@ -53,6 +53,18 @@ interface BottlenecksResponse {
   bottlenecks: BottleneckItem[];
 }
 
+function parseApiError(detail: any, fallback: string): string {
+  if (!detail) return fallback;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail.map((d: any) => d.msg || d.message || JSON.stringify(d)).join("; ");
+  }
+  if (typeof detail === "object") {
+    return detail.msg || detail.message || JSON.stringify(detail);
+  }
+  return String(detail);
+}
+
 export default function BottleneckEscalationPage() {
   const { user, fetchWithAuth } = useAuth();
   const stateCode = user?.jurisdiction?.state_code || "UP";
@@ -67,6 +79,7 @@ export default function BottleneckEscalationPage() {
   const [remarks, setRemarks] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const { data, isLoading } = useAuthenticatedQuery<BottlenecksResponse>(
     ["sno-bottlenecks", stateCode],
@@ -90,10 +103,12 @@ export default function BottleneckEscalationPage() {
     if (!selectedWork) return;
     setSubmitting(true);
     setSuccessMessage(null);
+    setErrorMessage(null);
 
     try {
       const res = await fetchWithAuth(`/api/v1/sno/bottlenecks/${selectedWork.work_id}/issue-notice`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           statutory_deadline_days: deadlineDays,
           custom_remarks: remarks || "Formal administrative notice issued to District Magistrate under MPLADS Rule 8.4.",
@@ -101,8 +116,11 @@ export default function BottleneckEscalationPage() {
         }),
       });
 
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.detail || "Failed to issue notice.");
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorText = parseApiError(body.detail, "Failed to issue notice.");
+        throw new Error(errorText);
+      }
 
       setSuccessMessage(`Official Memo ${body.memo_reference} successfully dispatched to District Magistrate.`);
       void queryClient.invalidateQueries({ queryKey: ["sno-bottlenecks"] });
@@ -110,9 +128,10 @@ export default function BottleneckEscalationPage() {
       setTimeout(() => {
         setSelectedWork(null);
         setSuccessMessage(null);
+        setErrorMessage(null);
       }, 2000);
     } catch (err: any) {
-      alert(err.message || "Failed to issue notice.");
+      setErrorMessage(err.message || "Failed to issue notice.");
     } finally {
       setSubmitting(false);
     }
@@ -417,6 +436,13 @@ export default function BottleneckEscalationPage() {
                   />
                 </div>
 
+                 {errorMessage && (
+                  <div className="rounded-lg bg-rose-50 border border-rose-200 p-3 text-rose-800 font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
                 {successMessage ? (
                   <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-emerald-800 font-semibold flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
@@ -428,7 +454,11 @@ export default function BottleneckEscalationPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => setSelectedWork(null)}
+                      onClick={() => {
+                        setSelectedWork(null);
+                        setErrorMessage(null);
+                        setSuccessMessage(null);
+                      }}
                       disabled={submitting}
                     >
                       Cancel

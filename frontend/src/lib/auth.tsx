@@ -215,6 +215,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (state.accessToken) {
         headers.set("Authorization", `Bearer ${state.accessToken}`);
       }
+      if (options.body && !(options.body instanceof FormData) && !headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+      }
 
       let res = await fetch(url, { ...options, headers, credentials: "include" });
 
