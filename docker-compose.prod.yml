@@ -51,8 +51,7 @@ services:
       dockerfile: Dockerfile
       target: production
     ports:
-      - "80:3000"
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - NODE_ENV=production
       - NEXT_PUBLIC_API_URL=http://backend:8000
