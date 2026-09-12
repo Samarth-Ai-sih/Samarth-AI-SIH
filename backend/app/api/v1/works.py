@@ -288,6 +288,8 @@ async def create_work(
         title=work.title,
         status=work.status,
         category=work.category,
+        state_code=work.state_code,
+        district_code=work.district_code,
         state_name=work.state_name,
         district_name=work.district_name,
         constituency=work.constituency,

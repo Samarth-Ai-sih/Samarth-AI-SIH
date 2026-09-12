@@ -1,7 +1,8 @@
 "use client";
 
 import { useAuth } from "@/lib/auth";
-import { formatCurrency, formatDate, STATUS_CONFIG, CATEGORY_LABELS, WorkStatus } from "@/lib/api";
+import { formatCurrency, formatDate, formatApiError, STATUS_CONFIG, CATEGORY_LABELS, WorkStatus } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import {
   BriefcaseBusiness,
   Plus,
@@ -175,9 +176,23 @@ export default function MPRecommendationsPage() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
+    const cleanTitle = title.trim();
+    if (cleanTitle.length < 3) {
+      setErrorMessage("Project title must contain at least 3 characters under statutory scheme guidelines.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const cleanDesc = description.trim();
+    if (cleanDesc.length < 5) {
+      setErrorMessage("Please provide a brief public utility justification (at least 5 characters).");
+      setIsSubmitting(false);
+      return;
+    }
+
     const amount = parseFloat(sanctionedAmount);
     if (isNaN(amount) || amount <= 0) {
-      setErrorMessage("Please enter a valid positive project outlay.");
+      setErrorMessage("Please enter a valid positive project outlay (₹ INR).");
       setIsSubmitting(false);
       return;
     }
@@ -189,8 +204,8 @@ export default function MPRecommendationsPage() {
     const districtName = districtCode === "UP-VNS" ? "Varanasi" : "District";
 
     const payload = {
-      title: title.trim(),
-      description: description.trim(),
+      title: cleanTitle,
+      description: cleanDesc,
       category,
       sub_category: subCategory.trim(),
       state_code: stateCode,
@@ -200,13 +215,14 @@ export default function MPRecommendationsPage() {
       constituency,
       pincode: pincode.trim() || "221001",
       mp_name: user?.full_name || "Hon. Member of Parliament",
+      mp_id: user?.user_id,
+      recommended_by_mp_id: user?.user_id,
       sanctioned_amount: amount,
       sc_st_quota_type: scStQuota,
       location: {
         latitude: latitude ? parseFloat(latitude) : 25.3176,
         longitude: longitude ? parseFloat(longitude) : 82.9739,
         address: address.trim() || `${constituency}, ${districtName}`,
-        pincode: pincode.trim() || "221001",
       },
     };
 
@@ -218,23 +234,28 @@ export default function MPRecommendationsPage() {
       });
 
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Failed to submit recommendation" }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        const errJson = await res.json().catch(() => null);
+        const errDetail = formatApiError(errJson || `HTTP ${res.status}: Failed to record proposal`);
+        throw new Error(errDetail);
       }
 
-      setSuccessMessage("Work proposal successfully submitted! It has been dispatched to the District Authority for Administrative Sanction.");
+      const createdWork = await res.json().catch(() => null);
+      const workRef = createdWork?.work_id ? ` [Ref: ${createdWork.work_id.slice(0, 8)}]` : "";
+      setSuccessMessage(`Public work proposal "${cleanTitle}" successfully recorded on records${workRef}! It has been transmitted to the District Authority (Collector/DM) for statutory Administrative Sanction (AS).`);
       setIsModalOpen(false);
       // Reset form
       setTitle("");
       setDescription("");
       setSanctionedAmount("");
+      setSubCategory("");
+      setPincode("");
       setAddress("");
       setLatitude("");
       setLongitude("");
       setDupResult(null);
       void fetchRecommendations();
     } catch (err: unknown) {
-      setErrorMessage(err instanceof Error ? err.message : "Submission failed");
+      setErrorMessage(formatApiError(err, "Failed to submit project recommendation"));
     } finally {
       setIsSubmitting(false);
     }
@@ -446,23 +467,46 @@ export default function MPRecommendationsPage() {
 
             <form onSubmit={handleCreateRecommendation} className="p-6 space-y-4">
               {errorMessage && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
-                  {errorMessage}
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold text-rose-800 flex items-start gap-2.5 shadow-xs">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-bold text-rose-900">Submission Requirements Not Met:</p>
+                    <p className="mt-0.5 leading-relaxed text-rose-700">{errorMessage}</p>
+                  </div>
                 </div>
               )}
 
               {/* Title */}
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                  Project Title *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-800 uppercase">
+                    Project Title *
+                  </label>
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold transition-colors",
+                      title.trim().length === 0
+                        ? "text-slate-400"
+                        : title.trim().length < 3
+                        ? "text-amber-600 font-bold"
+                        : "text-emerald-700 font-bold"
+                    )}
+                  >
+                    {title.trim().length === 0
+                      ? "Min 3 characters"
+                      : title.trim().length < 3
+                      ? `${title.trim().length}/3 chars (too short)`
+                      : `✓ ${title.trim().length} chars`}
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
+                  minLength={3}
                   placeholder="e.g., Installation of Solar High-Mast Lighting at Shivpur Chauraha"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs text-slate-900 focus:border-emerald-600 focus:outline-hidden"
+                  className="w-full h-10 rounded-xl border border-slate-200 px-3 text-xs text-slate-900 focus:border-emerald-600 focus:outline-hidden font-medium"
                 />
               </div>
 
@@ -508,7 +552,7 @@ export default function MPRecommendationsPage() {
                   <input
                     type="number"
                     required
-                    min="10000"
+                    min="1000"
                     step="1000"
                     placeholder="e.g., 1850000"
                     value={sanctionedAmount}
@@ -566,11 +610,30 @@ export default function MPRecommendationsPage() {
 
               {/* Description & Justification */}
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase mb-1">
-                  Community Benefit & Public Utility Justification *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-slate-800 uppercase">
+                    Community Benefit &amp; Public Utility Justification *
+                  </label>
+                  <span
+                    className={cn(
+                      "text-[11px] font-semibold transition-colors",
+                      description.trim().length === 0
+                        ? "text-slate-400"
+                        : description.trim().length < 5
+                        ? "text-amber-600 font-bold"
+                        : "text-emerald-700 font-bold"
+                    )}
+                  >
+                    {description.trim().length === 0
+                      ? "Min 5 characters"
+                      : description.trim().length < 5
+                      ? `${description.trim().length}/5 chars (too short)`
+                      : `✓ ${description.trim().length} chars`}
+                  </span>
+                </div>
                 <textarea
                   required
+                  minLength={5}
                   rows={3}
                   placeholder="Describe the public utility necessity, beneficiary village/ward, and rationale for MPLADS funding…"
                   value={description}

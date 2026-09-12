@@ -8,6 +8,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatApiError,
   RiskScore,
 } from "@/lib/api";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
@@ -132,14 +133,14 @@ export default function Work360Page() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Sanction failed" }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        const errJson = await res.json().catch(() => null);
+        throw new Error(formatApiError(errJson || `HTTP ${res.status}: Sanction failed`));
       }
       setIsSanctionModalOpen(false);
       setActionSuccessMsg(`Administrative Sanction granted successfully vide Order Ref: ${sanctionOrderRef}. Assigned to ${sanctionAgency}.`);
       await fetchWork();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to accord Administrative Sanction.");
+      alert(formatApiError(err, "Failed to accord Administrative Sanction."));
     } finally {
       setIsActionSubmitting(false);
     }
@@ -157,14 +158,14 @@ export default function Work360Page() {
         }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({ detail: "Rejection failed" }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        const errJson = await res.json().catch(() => null);
+        throw new Error(formatApiError(errJson || `HTTP ${res.status}: Rejection failed`));
       }
       setIsRejectModalOpen(false);
       setActionSuccessMsg(`Work proposal returned / rejected with official statutory notice.`);
       await fetchWork();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : "Failed to return recommendation.");
+      alert(formatApiError(err, "Failed to return recommendation."));
     } finally {
       setIsActionSubmitting(false);
     }

@@ -891,6 +891,7 @@ export function formatDateTime(dateStr: string | null | undefined): string {
  */
 export function formatApiError(detail: unknown, fallback: string = "An unexpected error occurred"): string {
   if (!detail) return fallback;
+  if (detail instanceof Error) return detail.message || fallback;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
     return detail
@@ -898,21 +899,30 @@ export function formatApiError(detail: unknown, fallback: string = "An unexpecte
         if (typeof item === "string") return item;
         if (item && typeof item === "object") {
           const loc = Array.isArray((item as Record<string, unknown>).loc)
-            ? ((item as Record<string, unknown>).loc as unknown[]).slice(1).join(".")
+            ? ((item as Record<string, unknown>).loc as unknown[])
+                .filter((part) => part !== "body" && part !== "query")
+                .join(".")
             : "";
           const msg = String((item as Record<string, unknown>).msg || JSON.stringify(item));
           return loc ? `${loc}: ${msg}` : msg;
         }
         return String(item);
       })
-      .join("; ");
+      .filter(Boolean)
+      .join("; ") || fallback;
   }
   if (typeof detail === "object") {
     const obj = detail as Record<string, unknown>;
+    if (obj.detail !== undefined) {
+      return formatApiError(obj.detail, fallback);
+    }
     if (typeof obj.message === "string") return obj.message;
     if (typeof obj.msg === "string") return obj.msg;
-    if (typeof obj.detail === "string") return obj.detail;
-    return JSON.stringify(detail);
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
   }
   return String(detail);
 }
