@@ -12,14 +12,14 @@ import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 const DEMO_ACCOUNTS = [
-  { label: "Admin", email: "admin.demo@samarth-demo.in", role: "System Admin" },
-  { label: "District Auth", email: "district.lucknow.demo@samarth-demo.in", role: "District Authority (Lucknow)" },
-  { label: "Inspector", email: "inspector.lucknow.demo@samarth-demo.in", role: "Field Inspector (Lucknow)" },
-  { label: "State Nodal", email: "sno.up.demo@samarth-demo.in", role: "State Nodal (UP)" },
-  { label: "MP", email: "mp.varanasi.demo@samarth-demo.in", role: "MP (Varanasi)" },
-  { label: "Agency", email: "agency.delhi.demo@samarth-demo.in", role: "Agency (Delhi)" },
-  { label: "MoSPI", email: "mospi.demo@samarth-demo.in", role: "MoSPI Officer" },
-  { label: "Citizen", email: "citizen.demo@samarth-demo.in", role: "Citizen User" },
+  { label: "MP (Varanasi)", email: "mp.varanasi.demo@samarth-demo.in", role: "MP (Varanasi Urban)" },
+  { label: "DA (Varanasi)", email: "da.varanasi.demo@samarth-demo.in", role: "District Magistrate (VNS)" },
+  { label: "Agency (Varanasi)", email: "agency.varanasi.demo@samarth-demo.in", role: "UP Jal Nigam (Line Agency)" },
+  { label: "Inspector (Varanasi)", email: "inspector.varanasi.demo@samarth-demo.in", role: "Field Technical Inspector" },
+  { label: "State Nodal (UP)", email: "sno.up.demo@samarth-demo.in", role: "State Nodal Officer (UP)" },
+  { label: "MoSPI", email: "mospi.demo@samarth-demo.in", role: "National Oversight" },
+  { label: "Admin", email: "admin.demo@samarth-demo.in", role: "System Administrator" },
+  { label: "Citizen", email: "citizen.demo@samarth-demo.in", role: "Public Social Auditor" },
 ];
 
 export default function LoginPage() {

@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ApiError, useAuthenticatedQuery } from "@/lib/query";
 import { useAuth } from "@/lib/auth";
 import { CaseListResponse, FinancialDashboardResponse, RiskDistribution, WorkListResponse, formatCurrency, formatDate } from "@/lib/api";
-import { AlertTriangle, ArrowRight, ClipboardCheck, FileWarning, MapPin, ShieldAlert, WalletCards } from "lucide-react";
+import { AlertTriangle, ArrowRight, ClipboardCheck, FileWarning, Landmark, MapPin, ShieldAlert, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { RoleCharter } from "@/components/dashboard/role-charter";
 
@@ -18,8 +18,8 @@ const roleCopy: Record<string, RoleCopy> = {
   mospi: { eyebrow: "MoSPI dashboard", title: "National programme oversight", description: "Review the current portfolio, delivery signals, and escalation queues across assigned jurisdictions.", queueLabel: "Open risk alert center", queueHref: "/dashboard/risk" },
   state_nodal_officer: { eyebrow: "State dashboard", title: "State delivery overview", description: "Review programme progress and queues for your state jurisdiction.", queueLabel: "Open compliance center", queueHref: "/dashboard/compliance" },
   district_authority: { eyebrow: "District dashboard", title: "District delivery and review", description: "Prioritise local work queues, field findings, cases, and citizen social-audit reports.", queueLabel: "Open case management", queueHref: "/dashboard/cases" },
-  mp: { eyebrow: "MP dashboard", title: "Constituency works overview", description: "Review public work delivery, milestones, and decision-support alerts for your constituency.", queueLabel: "Open work register", queueHref: "/dashboard/works" },
-  agency: { eyebrow: "Agency workspace", title: "Implementing agency workspace", description: "Use the work register to keep assigned delivery records current and respond to workflow requests.", queueLabel: "Open work register", queueHref: "/dashboard/works" },
+  mp: { eyebrow: "MP dashboard", title: "Constituency works overview", description: "Review public work delivery, milestones, and decision-support alerts for your constituency.", queueLabel: "Open MP Command Center", queueHref: "/dashboard/mp" },
+  agency: { eyebrow: "Agency workspace", title: "Implementing agency workspace", description: "Monitor assigned public works, record physical milestones, and submit tranche drawdowns.", queueLabel: "Open Agency Command Center", queueHref: "/dashboard/agency" },
   inspector: { eyebrow: "Inspector workspace", title: "Field inspection queue", description: "Open assigned tasks, capture field evidence safely, and submit inspection reports from any device.", queueLabel: "Open assigned inspections", queueHref: "/dashboard/inspections" },
 };
 const workRoles = new Set(["admin", "mospi", "state_nodal_officer", "district_authority", "mp", "agency"]);
@@ -31,6 +31,7 @@ export function RoleOverview() {
   const { user } = useAuth();
   const role = user?.role || "agency"; const copy = roleCopy[role] || roleCopy.agency;
   const works = useAuthenticatedQuery<WorkListResponse>(["overview", "works", role], "/api/v1/works?page=1&page_size=5&sort_by=updated_at&sort_order=desc", { enabled: workRoles.has(role) });
+  const pendingRecs = useAuthenticatedQuery<WorkListResponse>(["overview", "pending_recs", role], "/api/v1/works?status=recommended&page=1&page_size=5", { enabled: role === "district_authority" || role === "admin" });
   const risks = useAuthenticatedQuery<RiskDistribution>(["overview", "risk", role], "/api/v1/risk/distribution", { enabled: riskRoles.has(role) });
   const finance = useAuthenticatedQuery<FinancialDashboardResponse>(["overview", "finance", role], "/api/v1/financial-intelligence/dashboard", { enabled: financeRoles.has(role) });
   const cases = useAuthenticatedQuery<CaseListResponse>(["overview", "cases", role], role === "inspector" ? "/api/v1/cases/assigned?page=1&page_size=5" : "/api/v1/cases?page=1&page_size=5", { enabled: role === "inspector" || managerRoles.has(role) });
@@ -44,6 +45,92 @@ export function RoleOverview() {
     <PageHeader eyebrow={copy.eyebrow} title={copy.title} description={copy.description} actions={<Button asChild><Link href={copy.queueHref}>{copy.queueLabel}<ArrowRight className="h-4 w-4" /></Link></Button>} />
     {user?.must_change_password && <div role="alert" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><strong>Account action required.</strong> Change your temporary password in Settings before continuing with sensitive approvals.</div>}
     <RoleCharter currentRoleId={role} />
+    {(() => {
+      const snoAlerts = cases.data?.cases?.filter(
+        (c) =>
+          c.status === "escalated" ||
+          (c.source_id && c.source_id.startsWith("SNO/")) ||
+          (c.case_id && c.case_id.startsWith("CASE-SNO"))
+      );
+      if (!snoAlerts || snoAlerts.length === 0) return null;
+      return (
+        <div className="mb-6 rounded-xl border-2 border-rose-400 bg-gradient-to-r from-rose-50 via-rose-100/60 to-amber-50 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-3 w-3 relative mt-1 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-rose-950 uppercase tracking-wide">
+                🚨 Urgent Action Required: SNO Administrative Show-Cause Directive Issued
+              </h3>
+              <p className="mt-0.5 text-xs text-rose-800">
+                State Nodal Officer has issued {snoAlerts.length} formal directive{snoAlerts.length === 1 ? "" : "s"} under MPLADS Section 8.4 requiring district compliance review.
+              </p>
+            </div>
+          </div>
+          <Button asChild className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shrink-0 shadow-xs">
+            <Link href="/dashboard/cases">
+              Open Case Directives ({snoAlerts.length}) <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      );
+    })()}
+    {/* DA Alert: Pending MP Recommendations Awaiting Administrative Sanction */}
+    {(() => {
+      if (role !== "district_authority" && role !== "admin") return null;
+      const count = pendingRecs.data?.total || 0;
+      if (count === 0) return null;
+      return (
+        <div className="mb-6 rounded-xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-50 via-teal-50 to-blue-50 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="flex h-3 w-3 relative mt-1 shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-600"></span>
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-emerald-950 uppercase tracking-wide">
+                📋 Action Required: {count} MP Project Recommendation{count === 1 ? "" : "s"} Awaiting Administrative Sanction
+              </h3>
+              <p className="mt-0.5 text-xs text-emerald-800">
+                Hon&apos;ble Member of Parliament has submitted public utility proposals requiring technical feasibility vetting, executing agency assignment, and formal AS Order issuance.
+              </p>
+            </div>
+          </div>
+          <Button asChild className="bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-semibold shrink-0 shadow-xs">
+            <Link href="/dashboard/works?status=recommended">
+              Review Recommendations ({count}) <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      );
+    })()}
+
+    {/* MP Banner: Direct Navigation to MP Command Center */}
+    {role === "mp" && (
+      <div className="mb-6 rounded-2xl border-2 border-emerald-300 bg-gradient-to-br from-emerald-900 to-slate-900 p-5 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300 uppercase tracking-wide">
+            <Landmark className="h-4 w-4" />
+            Parliamentary Command Center Active
+          </div>
+          <h3 className="text-base font-bold text-white">
+            Live ₹5.00 Cr Entitlement & Statutory SC/ST Quota Telemetry
+          </h3>
+          <p className="text-xs text-emerald-100/80">
+            Propose community works with real-time &le;50m duplicate detection, monitor District Magistrate sanctions, and inspect your official fiscal ledger.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button asChild className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold">
+            <Link href="/dashboard/mp">
+              Open MP Command Center <ArrowRight className="ml-1 h-3.5 w-3.5" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+    )}
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Portfolio summary">
       {role === "inspector" ? (
         <Metric icon={ClipboardCheck} label="Assigned inspections" value={valueOrDash(caseCount)} detail="Tasks awaiting your field update" tone="sky" />

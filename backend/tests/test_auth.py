@@ -29,6 +29,7 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 from httpx import AsyncClient, ASGITransport
 from app.main import app
+from app.core.config import get_settings
 from app.core.database import get_database
 from app.core.security import (
     create_access_token,
@@ -529,7 +530,7 @@ class TestLoginEndpoint:
 class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_exceeded(self, mock_db, mock_redis):
-        mock_redis.get = AsyncMock(return_value="5")  # At limit
+        mock_redis.get = AsyncMock(return_value=str(get_settings().RATE_LIMIT_LOGIN_MAX))  # At limit
 
         with patch("app.core.rate_limit.get_redis_client") as mock_rc:
             mock_rc.return_value.client = mock_redis

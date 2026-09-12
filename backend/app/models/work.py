@@ -166,6 +166,19 @@ class WorkInDB(BaseModel):
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )
+    # SNO Administrative Directives
+    sno_notice_issued: Optional[bool] = None
+    latest_memo_ref: Optional[str] = None
+    cure_deadline: Optional[str] = None
+    notice_issued_at: Optional[str] = None
+    active_case_id: Optional[str] = None
+    escalation_level: Optional[str] = None
+
+    # MP Recommendation & Sanction Tracking
+    sc_st_quota_type: Optional[str] = "general"
+    recommended_by_mp_id: Optional[str] = None
+    sanction_order_ref: Optional[str] = None
+    rejection_reason: Optional[str] = None
 
 
 # ── Request Schemas ──────────────────────────────────────────────
@@ -195,6 +208,76 @@ class WorkCreateRequest(BaseModel):
 
     location: Optional[WorkLocation] = None
 
+    # MP Special Quota Tagging
+    sc_st_quota_type: Optional[str] = Field(default="general", pattern=r"^(general|sc|st)$")
+    recommended_by_mp_id: Optional[str] = None
+
+
+class WorkSanctionRequest(BaseModel):
+    """District Authority granting Administrative Sanction to an MP recommendation."""
+    sanctioned_amount: float = Field(gt=0, description="Sanctioned project financial outlay in INR")
+    implementing_agency: str = Field(min_length=2, max_length=200, description="Assigned public line agency or executing body")
+    sanction_order_ref: str = Field(min_length=2, max_length=100, description="Official Administrative Sanction order number")
+    expected_completion_date: Optional[datetime] = None
+    remarks: Optional[str] = Field(default="", max_length=1000)
+
+
+class WorkRejectRecommendationRequest(BaseModel):
+    """District Authority returning or rejecting an MP recommendation with statutory rationale."""
+    rejection_reason: str = Field(min_length=5, max_length=1000, description="Statutory rejection or clarification reason")
+
+
+class PreSubmissionDuplicateCheckRequest(BaseModel):
+    """Spatial and title duplicate check before an MP submits a proposal."""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    title: Optional[str] = None
+    constituency: Optional[str] = None
+    state_code: Optional[str] = None
+
+
+class DuplicateWarning(BaseModel):
+    work_id: str
+    title: str
+    status: str
+    distance_meters: Optional[float] = None
+    similarity_score: Optional[float] = None
+    warning_reason: str
+
+
+class PreSubmissionDuplicateCheckResponse(BaseModel):
+    has_potential_duplicate: bool
+    warnings: list[DuplicateWarning] = Field(default_factory=list)
+
+
+class MPEntitlementSummaryResponse(BaseModel):
+    """MPLADS ₹5.00 Cr Statutory Entitlement & Quota Telemetry."""
+    total_annual_entitlement: float = 50000000.0  # ₹5.00 Cr
+    tranche_1_allocation: float = 25000000.0       # ₹2.50 Cr
+    tranche_2_allocation: float = 25000000.0       # ₹2.50 Cr
+    recommended_amount: float = 0.0               # Proposals pending DA sanction
+    sanctioned_amount: float = 0.0                # Sanctioned by DA
+    disbursed_amount: float = 0.0                 # Funds released
+    actual_expenditure: float = 0.0               # Utilized funds
+    total_committed: float = 0.0                  # Sanctioned + Recommended
+    available_balance: float = 50000000.0         # Entitlement - Committed
+    utilization_pct: float = 0.0
+
+    # Statutory Quotas (15% SC = ₹75 Lakh, 7.5% ST = ₹37.5 Lakh)
+    sc_allocation_target: float = 7500000.0
+    sc_committed_amount: float = 0.0
+    sc_quota_achieved_pct: float = 0.0
+
+    st_allocation_target: float = 3750000.0
+    st_committed_amount: float = 0.0
+    st_quota_achieved_pct: float = 0.0
+
+    # Breakdown of works
+    works_count: dict[str, int] = Field(default_factory=dict)
+    mp_name: str = ""
+    constituency: str = ""
+    state_code: str = ""
+
 
 class WorkUpdateRequest(BaseModel):
     """Partial update for work fields."""
@@ -218,7 +301,7 @@ class WorkStatusUpdateRequest(BaseModel):
 class PaymentTrancheCreateRequest(BaseModel):
     """Add a payment tranche to a work."""
     amount: float = Field(gt=0)
-    released_date: datetime
+    released_date: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     purpose: str = Field(default="", max_length=300)
 
 
@@ -257,6 +340,10 @@ class WorkSummaryResponse(BaseModel):
     sanctioned_date: Optional[datetime] = None
     expected_completion_date: Optional[datetime] = None
     created_at: Optional[datetime] = None
+    # MP Recommendation & Sanction tracking
+    sc_st_quota_type: Optional[str] = "general"
+    sanction_order_ref: Optional[str] = None
+    rejection_reason: Optional[str] = None
     # Internal work queues can distinguish controlled demo records from
     # operator-entered records without exposing provenance on public routes.
     data_source: str = "operator_entered"
@@ -402,3 +489,75 @@ class WorkDetailResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     data_source: str = "operator_entered"
+
+    # SNO Administrative Directives
+    sno_notice_issued: Optional[bool] = None
+    latest_memo_ref: Optional[str] = None
+    cure_deadline: Optional[str] = None
+    notice_issued_at: Optional[str] = None
+    active_case_id: Optional[str] = None
+    escalation_level: Optional[str] = None
+
+    # MP Recommendation & Sanction Tracking
+    sc_st_quota_type: Optional[str] = "general"
+    recommended_by_mp_id: Optional[str] = None
+    sanction_order_ref: Optional[str] = None
+    rejection_reason: Optional[str] = None
+
+
+# ── Stakeholder & Request Routing Models ──────────────────────────
+
+
+class StakeholderInfo(BaseModel):
+    """Details of a designated government user/authority in the workflow."""
+    role: str
+    role_label: str
+    name: str
+    email: str
+    user_id: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    phone: Optional[str] = None
+    status: str = "active"
+
+
+class StageRoutingInfo(BaseModel):
+    """Status and assigned user for a specific governance stage."""
+    stage_id: str  # mp_recommendation, da_sanction, agency_execution, field_inspection, audit_completion
+    stage_label: str
+    status: str    # completed, in_progress, pending, rejected
+    active_custodian: Optional[StakeholderInfo] = None
+    action_required: str = ""
+    action_ref: Optional[str] = None
+    completed_at: Optional[datetime] = None
+    sla_days_remaining: Optional[int] = None
+    is_current_stage: bool = False
+
+
+class WorkRoutingResponse(BaseModel):
+    """Complete multi-stakeholder governance and request routing response."""
+    work_id: str
+    work_title: str
+    current_status: WorkStatus
+    category: WorkCategory
+    sanctioned_amount: float = 0.0
+    district_code: str = ""
+    district_name: str = ""
+    state_code: str = ""
+    constituency: str = ""
+    originating_mp: Optional[StakeholderInfo] = None
+    district_authority: Optional[StakeholderInfo] = None
+    implementing_agency: Optional[StakeholderInfo] = None
+    assigned_inspector: Optional[StakeholderInfo] = None
+    state_nodal_officer: Optional[StakeholderInfo] = None
+    current_custodian: Optional[StakeholderInfo] = None
+    current_stage_id: str = "da_sanction"
+    current_action_required: str = ""
+    stages: list[StageRoutingInfo] = Field(default_factory=list)
+
+
+class DirectInspectionDispatchRequest(BaseModel):
+    """Request by DA or Agency to dispatch a field inspector to verify a work."""
+    inspector_user_id: Optional[str] = None
+    milestone_stage: str = Field(default="site_verification", max_length=100)
+    instructions: str = Field(default="Conduct on-site geotagged inspection and verify physical progress.", max_length=1000)
+    priority: str = Field(default="routine", pattern=r"^(routine|urgent|critical)$")

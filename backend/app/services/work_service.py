@@ -22,20 +22,33 @@ from uuid import uuid4
 
 from app.core.database import Database
 from app.models.audit import AuditEventType
+from app.models.background import NotificationEventType
 from app.models.work import (
+    DirectInspectionDispatchRequest,
+    DuplicateWarning,
+    MPEntitlementSummaryResponse,
     PaymentTranche,
     PaymentTrancheCreateRequest,
+    PreSubmissionDuplicateCheckRequest,
+    PreSubmissionDuplicateCheckResponse,
     ProgressUpdate,
     ProgressUpdateCreateRequest,
+    StageRoutingInfo,
+    StakeholderInfo,
     TimelineEvent,
+    WorkCategory,
     WorkCreateRequest,
     WorkInDB,
     WorkLocation,
+    WorkRejectRecommendationRequest,
+    WorkRoutingResponse,
+    WorkSanctionRequest,
     WorkStatus,
     WorkStatusUpdateRequest,
     WorkUpdateRequest,
 )
 from app.services.audit_service import AuditService
+from app.services.notification_service import NotificationService
 
 logger = logging.getLogger("samarth.works")
 
@@ -44,7 +57,7 @@ COLLECTION = "works"
 # Deliberate work-lifecycle state machine. Terminal cancellation cannot be
 # silently reversed; reopening requires a new, explicitly audited work record.
 ALLOWED_STATUS_TRANSITIONS: dict[WorkStatus, set[WorkStatus]] = {
-    WorkStatus.RECOMMENDED: {WorkStatus.UNDER_REVIEW, WorkStatus.CANCELLED},
+    WorkStatus.RECOMMENDED: {WorkStatus.UNDER_REVIEW, WorkStatus.SANCTIONED, WorkStatus.CANCELLED},
     WorkStatus.UNDER_REVIEW: {WorkStatus.RECOMMENDED, WorkStatus.SANCTIONED, WorkStatus.CANCELLED},
     WorkStatus.SANCTIONED: {WorkStatus.IN_PROGRESS, WorkStatus.ON_HOLD, WorkStatus.CANCELLED},
     WorkStatus.IN_PROGRESS: {WorkStatus.ON_HOLD, WorkStatus.COMPLETED, WorkStatus.UNDER_VERIFICATION, WorkStatus.CANCELLED},
@@ -109,6 +122,8 @@ class WorkService:
             timeline=[initial_timeline],
             data_source="operator_entered",
             created_by=created_by_user_id,
+            sc_st_quota_type=data.sc_st_quota_type or "general",
+            recommended_by_mp_id=data.recommended_by_mp_id or (created_by_user_id if data.mp_name else None),
             created_at=now,
             updated_at=now,
         )
@@ -129,8 +144,31 @@ class WorkService:
                 "title": data.title,
                 "state_code": data.state_code,
                 "category": data.category.value,
+                "sc_st_quota_type": work.sc_st_quota_type,
             },
         )
+
+        # Dispatch real-time notification to District Authority in matching jurisdiction
+        try:
+            da_query: dict[str, Any] = {"role": "district_authority"}
+            if data.district_code:
+                da_query["jurisdiction.district_code"] = re.compile(f"^{re.escape(data.district_code)}$", re.IGNORECASE)
+            elif data.state_code:
+                da_query["jurisdiction.state_code"] = re.compile(f"^{re.escape(data.state_code)}$", re.IGNORECASE)
+            da_users = await self._db.get_collection("users").find(da_query, {"_id": 0, "user_id": 1}).to_list(length=10)
+            notif_svc = NotificationService(self._db)
+            for da in da_users:
+                await notif_svc.create_event(
+                    recipient_user_id=da["user_id"],
+                    event_type=NotificationEventType.MP_WORK_RECOMMENDED,
+                    resource_type="work",
+                    resource_id=work_id,
+                    idempotency_key=f"mp_rec_{work_id}_{da['user_id']}",
+                    title=f"New MP Recommendation: {data.title}",
+                    message=f"MP {data.mp_name or 'Hon. MP'} recommended a public asset in {data.constituency or data.district_name} (Rs {data.sanctioned_amount:,.2f}) awaiting Administrative Sanction.",
+                )
+        except Exception as e:
+            logger.warning("Failed to dispatch DA notification for new work %s: %s", work_id, e)
 
         logger.info("Work created: %s — %s", work_id, data.title)
         return work
@@ -159,6 +197,15 @@ class WorkService:
         """Build a single Mongo query so IDOR checks remain atomic with writes."""
         query: dict[str, Any] = {"work_id": work_id}
         if jurisdiction_filter:
+            state_code = jurisdiction_filter.get("state_code")
+            if state_code:
+                return {
+                    "work_id": work_id,
+                    "$or": [
+                        jurisdiction_filter,
+                        {"state_code": state_code, "sno_notice_issued": True},
+                    ],
+                }
             query.update(jurisdiction_filter)
         return query
 
@@ -901,6 +948,791 @@ class WorkService:
         await self._collection.create_index([("location.geo", "2dsphere")], name="location.geo_2dsphere")
         logger.info("Work indexes ensured; GeoJSON locations backfilled: %s", backfilled)
 
+    # ── MP Recommendation & District Authority Sanction Workflow ─
+
+    async def sanction_work(
+        self,
+        work_id: str,
+        data: WorkSanctionRequest,
+        *,
+        user_id: str,
+        ip_address: str = "",
+        user_agent: str = "",
+        jurisdiction_filter: Optional[dict[str, Any]] = None,
+    ) -> Optional[WorkInDB]:
+        """Grant Administrative Sanction to an MP recommendation."""
+        work = await self.get_work(work_id, jurisdiction_filter=jurisdiction_filter)
+        if not work:
+            return None
+        if work.status not in (WorkStatus.RECOMMENDED, WorkStatus.UNDER_REVIEW):
+            raise ValueError(f"Only works in recommended or under_review status can be sanctioned (current: {work.status.value})")
+
+        now = datetime.now(timezone.utc)
+        update: dict[str, Any] = {
+            "status": WorkStatus.SANCTIONED.value,
+            "sanctioned_amount": data.sanctioned_amount,
+            "implementing_agency": data.implementing_agency,
+            "sanction_order_ref": data.sanction_order_ref,
+            "sanctioned_date": now,
+            "updated_at": now,
+        }
+        if data.expected_completion_date:
+            update["expected_completion_date"] = data.expected_completion_date
+
+        timeline_event = TimelineEvent(
+            event_id=str(uuid4()),
+            timestamp=now,
+            event_type="work_sanctioned",
+            title="Administrative Sanction (AS) Accorded",
+            description=(
+                f"Administrative Sanction order issued: {data.sanction_order_ref}. "
+                f"Sanctioned outlay: ₹{data.sanctioned_amount:,.2f}. "
+                f"Implementing agency: {data.implementing_agency}."
+                + (f" Remarks: {data.remarks}" if data.remarks else "")
+            ),
+            actor=user_id,
+        )
+
+        await self._collection.update_one(
+            {"work_id": work_id},
+            {
+                "$set": update,
+                "$push": {"timeline": timeline_event.model_dump()},
+            },
+        )
+
+        await self._audit.log_event(
+            AuditEventType.WORK_STATUS_CHANGE,
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            resource_type="work",
+            resource_id=work_id,
+            details={
+                "action": "administrative_sanction",
+                "sanction_order_ref": data.sanction_order_ref,
+                "sanctioned_amount": data.sanctioned_amount,
+                "implementing_agency": data.implementing_agency,
+            },
+        )
+
+        # Real-time notification to MP
+        try:
+            mp_user_id = work.mp_id or work.recommended_by_mp_id
+            if not mp_user_id and work.constituency:
+                mp_user = await self._db.get_collection("users").find_one(
+                    {"role": "mp", "jurisdiction.constituency": {"$regex": f"^{re.escape(work.constituency)}$", "$options": "i"}},
+                    {"_id": 0, "user_id": 1}
+                )
+                if mp_user:
+                    mp_user_id = mp_user.get("user_id")
+
+            if mp_user_id:
+                notif_svc = NotificationService(self._db)
+                await notif_svc.create_event(
+                    recipient_user_id=mp_user_id,
+                    event_type=NotificationEventType.MP_WORK_SANCTIONED,
+                    resource_type="work",
+                    resource_id=work_id,
+                    idempotency_key=f"sanction_{work_id}_{now.timestamp()}",
+                    title=f"Work Sanctioned: {work.title}",
+                    message=f"Administrative Sanction accorded (AS Ref: {data.sanction_order_ref}) for ₹{data.sanctioned_amount:,.2f} via {data.implementing_agency}.",
+                )
+        except Exception as e:
+            logger.warning("Failed to notify MP about sanction for work %s: %s", work_id, e)
+
+        return await self.get_work(work_id)
+
+    async def reject_recommendation(
+        self,
+        work_id: str,
+        data: WorkRejectRecommendationRequest,
+        *,
+        user_id: str,
+        ip_address: str = "",
+        user_agent: str = "",
+        jurisdiction_filter: Optional[dict[str, Any]] = None,
+    ) -> Optional[WorkInDB]:
+        """District Authority returning or rejecting an MP recommendation with statutory reason."""
+        work = await self.get_work(work_id, jurisdiction_filter=jurisdiction_filter)
+        if not work:
+            return None
+        if work.status not in (WorkStatus.RECOMMENDED, WorkStatus.UNDER_REVIEW):
+            raise ValueError(f"Only works in recommended or under_review status can be rejected (current: {work.status.value})")
+
+        now = datetime.now(timezone.utc)
+        update: dict[str, Any] = {
+            "status": WorkStatus.CANCELLED.value,
+            "rejection_reason": data.rejection_reason,
+            "updated_at": now,
+        }
+
+        timeline_event = TimelineEvent(
+            event_id=str(uuid4()),
+            timestamp=now,
+            event_type="recommendation_rejected",
+            title="Recommendation Rejected / Clarification Required",
+            description=f"District Authority statutory rationale: {data.rejection_reason}",
+            actor=user_id,
+        )
+
+        await self._collection.update_one(
+            {"work_id": work_id},
+            {
+                "$set": update,
+                "$push": {"timeline": timeline_event.model_dump()},
+            },
+        )
+
+        await self._audit.log_event(
+            AuditEventType.WORK_STATUS_CHANGE,
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            resource_type="work",
+            resource_id=work_id,
+            details={
+                "action": "recommendation_rejected",
+                "rejection_reason": data.rejection_reason,
+            },
+        )
+
+        # Real-time notification to MP
+        try:
+            mp_user_id = work.mp_id or work.recommended_by_mp_id
+            if not mp_user_id and work.constituency:
+                mp_user = await self._db.get_collection("users").find_one(
+                    {"role": "mp", "jurisdiction.constituency": {"$regex": f"^{re.escape(work.constituency)}$", "$options": "i"}},
+                    {"_id": 0, "user_id": 1}
+                )
+                if mp_user:
+                    mp_user_id = mp_user.get("user_id")
+
+            if mp_user_id:
+                notif_svc = NotificationService(self._db)
+                await notif_svc.create_event(
+                    recipient_user_id=mp_user_id,
+                    event_type=NotificationEventType.MP_WORK_REJECTED,
+                    resource_type="work",
+                    resource_id=work_id,
+                    idempotency_key=f"reject_{work_id}_{now.timestamp()}",
+                    title=f"Recommendation Returned: {work.title}",
+                    message=f"District Authority returned recommendation: {data.rejection_reason}",
+                )
+        except Exception as e:
+            logger.warning("Failed to notify MP about rejection for work %s: %s", work_id, e)
+
+        return await self.get_work(work_id)
+
+    async def check_pre_submission_duplicate(
+        self,
+        req: PreSubmissionDuplicateCheckRequest,
+    ) -> PreSubmissionDuplicateCheckResponse:
+        """Pre-submission spatial and title duplicate check for MP proposals."""
+        warnings: list[DuplicateWarning] = []
+        query: dict[str, Any] = {"status": {"$ne": WorkStatus.CANCELLED.value}}
+        if req.state_code:
+            query["state_code"] = {"$regex": f"^{re.escape(req.state_code.strip())}$", "$options": "i"}
+
+        cursor = self._collection.find(
+            query,
+            {
+                "_id": 0,
+                "work_id": 1,
+                "title": 1,
+                "status": 1,
+                "location": 1,
+            }
+        )
+        existing_works = await cursor.to_list(length=2000)
+
+        # 1. Spatial distance check (limit <= 50m)
+        if req.latitude is not None and req.longitude is not None and _valid_coordinates(req.latitude, req.longitude):
+            target_lat = float(req.latitude)
+            target_lng = float(req.longitude)
+            for w in existing_works:
+                loc = w.get("location") or {}
+                lat = loc.get("latitude")
+                lng = loc.get("longitude")
+                if _valid_coordinates(lat, lng):
+                    dist = _haversine_distance_meters(target_lat, target_lng, float(lat), float(lng))
+                    if dist <= 50.0:
+                        warnings.append(
+                            DuplicateWarning(
+                                work_id=w["work_id"],
+                                title=w.get("title", "Untitled"),
+                                status=w.get("status", "recommended"),
+                                distance_meters=round(dist, 1),
+                                similarity_score=None,
+                                warning_reason=f"Existing asset located within {dist:.1f}m (MPLADS proximity limit: 50m).",
+                            )
+                        )
+
+        # 2. Textual title similarity check
+        if req.title and req.title.strip():
+            target_title = req.title.strip()
+            for w in existing_works:
+                ex_title = w.get("title", "")
+                sim = _text_similarity(target_title, ex_title)
+                if sim >= 0.70:
+                    # Avoid duplicate warning for same work
+                    if not any(warn.work_id == w["work_id"] for warn in warnings):
+                        warnings.append(
+                            DuplicateWarning(
+                                work_id=w["work_id"],
+                                title=ex_title,
+                                status=w.get("status", "recommended"),
+                                distance_meters=None,
+                                similarity_score=round(sim, 2),
+                                warning_reason=f"High textual similarity ({sim*100:.0f}%) with existing work.",
+                            )
+                        )
+
+        return PreSubmissionDuplicateCheckResponse(
+            has_potential_duplicate=len(warnings) > 0,
+            warnings=warnings[:10],
+        )
+
+    async def get_mp_entitlement_summary(
+        self,
+        *,
+        constituency: Optional[str] = None,
+        mp_id: Optional[str] = None,
+        mp_name: Optional[str] = None,
+        state_code: Optional[str] = None,
+    ) -> MPEntitlementSummaryResponse:
+        """Calculate live ₹5.00 Cr Entitlement & Statutory Quota Telemetry for an MP."""
+        query: dict[str, Any] = {}
+        if constituency:
+            query["constituency"] = {"$regex": f"^{re.escape(constituency.strip())}", "$options": "i"}
+        elif mp_id:
+            query["$or"] = [{"mp_id": mp_id}, {"recommended_by_mp_id": mp_id}]
+        elif mp_name:
+            query["mp_name"] = {"$regex": re.escape(mp_name.strip()), "$options": "i"}
+        elif state_code:
+            query["state_code"] = {"$regex": f"^{re.escape(state_code.strip())}$", "$options": "i"}
+
+        cursor = self._collection.find(
+            query,
+            {
+                "_id": 0,
+                "work_id": 1,
+                "title": 1,
+                "status": 1,
+                "sanctioned_amount": 1,
+                "funds_released": 1,
+                "actual_expenditure": 1,
+                "sc_st_quota_type": 1,
+                "category": 1,
+            }
+        )
+        works = await cursor.to_list(length=2000)
+
+        total_annual_entitlement = 50000000.0  # ₹5.00 Cr
+        tranche_1 = 25000000.0
+        tranche_2 = 25000000.0
+
+        recommended_amount = 0.0
+        sanctioned_amount = 0.0
+        disbursed_amount = 0.0
+        actual_expenditure = 0.0
+        sc_committed = 0.0
+        st_committed = 0.0
+        works_count: dict[str, int] = {
+            "total": len(works),
+            "recommended": 0,
+            "under_review": 0,
+            "sanctioned": 0,
+            "in_progress": 0,
+            "on_hold": 0,
+            "completed": 0,
+            "cancelled": 0,
+        }
+
+        for w in works:
+            status = w.get("status", "recommended")
+            amt = float(w.get("sanctioned_amount") or 0.0)
+            released = float(w.get("funds_released") or 0.0)
+            exp = float(w.get("actual_expenditure") or 0.0)
+            quota = (w.get("sc_st_quota_type") or "general").lower()
+
+            if status in works_count:
+                works_count[status] += 1
+
+            if status in ("recommended", "under_review"):
+                recommended_amount += amt
+            elif status in ("sanctioned", "in_progress", "on_hold", "completed", "under_verification"):
+                sanctioned_amount += amt
+                disbursed_amount += released
+                actual_expenditure += exp
+                if quota == "sc":
+                    sc_committed += amt
+                elif quota == "st":
+                    st_committed += amt
+
+        total_committed = sanctioned_amount + recommended_amount
+        available_balance = max(0.0, total_annual_entitlement - total_committed)
+        utilization_pct = round(min(100.0, (sanctioned_amount / total_annual_entitlement) * 100), 2) if total_annual_entitlement > 0 else 0.0
+
+        sc_target = 7500000.0  # 15%
+        sc_pct = round(min(100.0, (sc_committed / sc_target) * 100), 2) if sc_target > 0 else 0.0
+
+        st_target = 3750000.0  # 7.5%
+        st_pct = round(min(100.0, (st_committed / st_target) * 100), 2) if st_target > 0 else 0.0
+
+        return MPEntitlementSummaryResponse(
+            total_annual_entitlement=total_annual_entitlement,
+            tranche_1_allocation=tranche_1,
+            tranche_2_allocation=tranche_2,
+            recommended_amount=round(recommended_amount, 2),
+            sanctioned_amount=round(sanctioned_amount, 2),
+            disbursed_amount=round(disbursed_amount, 2),
+            actual_expenditure=round(actual_expenditure, 2),
+            total_committed=round(total_committed, 2),
+            available_balance=round(available_balance, 2),
+            utilization_pct=utilization_pct,
+            sc_allocation_target=sc_target,
+            sc_committed_amount=round(sc_committed, 2),
+            sc_quota_achieved_pct=sc_pct,
+            st_allocation_target=st_target,
+            st_committed_amount=round(st_committed, 2),
+            st_quota_achieved_pct=st_pct,
+            works_count=works_count,
+            mp_name=mp_name or "",
+            constituency=constituency or "",
+            state_code=state_code or "",
+        )
+
+    async def get_work_routing(
+        self,
+        work_id: str,
+        *,
+        jurisdiction_filter: Optional[dict[str, Any]] = None,
+    ) -> Optional[WorkRoutingResponse]:
+        """Resolve full 5-tier stakeholder request routing and active custodian details."""
+        work = await self.get_work(work_id, jurisdiction_filter=jurisdiction_filter)
+        if not work:
+            return None
+
+        users_col = self._db.get_collection("users")
+        cases_col = self._db.get_collection("cases")
+
+        # 1. Resolve Originating MP
+        mp_user = None
+        if work.mp_id or work.recommended_by_mp_id:
+            mp_user = await users_col.find_one(
+                {"user_id": work.mp_id or work.recommended_by_mp_id},
+                {"_id": 0, "hashed_password": 0}
+            )
+        if not mp_user and work.constituency:
+            mp_user = await users_col.find_one(
+                {"role": "mp", "jurisdiction.constituency": re.compile(f"^{re.escape(work.constituency)}$", re.IGNORECASE)},
+                {"_id": 0, "hashed_password": 0}
+            )
+        if not mp_user and work.mp_name:
+            mp_user = await users_col.find_one(
+                {"role": "mp", "full_name": re.compile(re.escape(work.mp_name), re.IGNORECASE)},
+                {"_id": 0, "hashed_password": 0}
+            )
+
+        if mp_user:
+            mp_info = StakeholderInfo(
+                role="mp",
+                role_label="Member of Parliament (Lok Sabha)",
+                name=mp_user.get("full_name") or work.mp_name or "Hon. MP",
+                email=mp_user.get("email") or "mp@samarth.gov.in",
+                user_id=mp_user.get("user_id"),
+                jurisdiction=work.constituency or (mp_user.get("jurisdiction", {}) or {}).get("constituency", "Constituency"),
+                status="active" if mp_user.get("is_active", True) else "inactive",
+            )
+        else:
+            mp_info = StakeholderInfo(
+                role="mp",
+                role_label="Member of Parliament (Lok Sabha)",
+                name=work.mp_name or "Hon. Member of Parliament",
+                email=f"mp.{re.sub(r'[^a-zA-Z0-9]', '', (work.constituency or 'constituency')).lower()}@samarth.gov.in",
+                jurisdiction=work.constituency or work.district_name or "Constituency",
+                status="active",
+            )
+
+        # 2. Resolve District Authority
+        da_query: dict[str, Any] = {"role": "district_authority"}
+        if work.district_code:
+            da_query["jurisdiction.district_code"] = re.compile(f"^{re.escape(work.district_code)}$", re.IGNORECASE)
+        elif work.state_code:
+            da_query["jurisdiction.state_code"] = re.compile(f"^{re.escape(work.state_code)}$", re.IGNORECASE)
+        da_user = await users_col.find_one(da_query, {"_id": 0, "hashed_password": 0})
+
+        if da_user:
+            da_info = StakeholderInfo(
+                role="district_authority",
+                role_label="District Magistrate / Deputy Commissioner",
+                name=da_user.get("full_name") or f"District Authority ({work.district_name or work.district_code})",
+                email=da_user.get("email") or f"dm.{work.district_code.lower()}@samarth.gov.in",
+                user_id=da_user.get("user_id"),
+                jurisdiction=f"{work.district_name} ({work.district_code})" if work.district_name else work.district_code,
+                status="active" if da_user.get("is_active", True) else "inactive",
+            )
+        else:
+            da_info = StakeholderInfo(
+                role="district_authority",
+                role_label="District Magistrate / Deputy Commissioner",
+                name=f"District Magistrate ({work.district_name or work.district_code or 'District'})",
+                email=f"dm.{re.sub(r'[^a-zA-Z0-9]', '', (work.district_code or 'district')).lower()}@samarth.gov.in",
+                jurisdiction=work.district_name or work.district_code or "District",
+                status="active",
+            )
+
+        # 3. Resolve Implementing Agency
+        agency_name = work.implementing_agency or "Public Works Department (PWD)"
+        agency_query: dict[str, Any] = {"role": "agency"}
+        if work.district_code:
+            agency_query["jurisdiction.district_code"] = re.compile(f"^{re.escape(work.district_code)}$", re.IGNORECASE)
+        agency_user = await users_col.find_one(agency_query, {"_id": 0, "hashed_password": 0})
+
+        if agency_user:
+            agency_info = StakeholderInfo(
+                role="agency",
+                role_label="Implementing / Executing Line Agency",
+                name=agency_name or agency_user.get("full_name") or "Executing Line Agency",
+                email=agency_user.get("email") or "agency@samarth.gov.in",
+                user_id=agency_user.get("user_id"),
+                jurisdiction=work.district_name or work.district_code,
+                status="active" if agency_user.get("is_active", True) else "inactive",
+            )
+        else:
+            agency_info = StakeholderInfo(
+                role="agency",
+                role_label="Implementing / Executing Line Agency",
+                name=agency_name,
+                email=f"agency.{re.sub(r'[^a-zA-Z0-9]', '', (work.district_code or 'execution')).lower()}@samarth.gov.in",
+                jurisdiction=work.district_name or work.district_code or "Division",
+                status="active",
+            )
+
+        # 4. Resolve Field Inspector
+        insp_case = await cases_col.find_one({"work_id": work_id}, {"_id": 0})
+        inspector_user = None
+        if insp_case and insp_case.get("assigned_inspector_id"):
+            inspector_user = await users_col.find_one(
+                {"user_id": insp_case["assigned_inspector_id"]},
+                {"_id": 0, "hashed_password": 0}
+            )
+
+        if not inspector_user and work.district_code:
+            inspector_user = await users_col.find_one(
+                {"role": "inspector", "jurisdiction.district_code": re.compile(f"^{re.escape(work.district_code)}$", re.IGNORECASE)},
+                {"_id": 0, "hashed_password": 0}
+            )
+
+        if not inspector_user and work.state_code:
+            inspector_user = await users_col.find_one(
+                {"role": "inspector", "jurisdiction.state_code": re.compile(f"^{re.escape(work.state_code)}$", re.IGNORECASE)},
+                {"_id": 0, "hashed_password": 0}
+            )
+
+        if inspector_user:
+            inspector_info = StakeholderInfo(
+                role="inspector",
+                role_label="Field Technical Inspector",
+                name=inspector_user.get("full_name") or "Field Technical Inspector",
+                email=inspector_user.get("email") or "inspector@samarth.gov.in",
+                user_id=inspector_user.get("user_id"),
+                jurisdiction=work.district_name or work.district_code,
+                status="active" if inspector_user.get("is_active", True) else "inactive",
+            )
+        else:
+            inspector_info = StakeholderInfo(
+                role="inspector",
+                role_label="Field Technical Inspector",
+                name=f"Field Inspection Division ({work.district_name or 'District'})",
+                email=f"inspector.{re.sub(r'[^a-zA-Z0-9]', '', (work.district_code or 'field')).lower()}@samarth.gov.in",
+                jurisdiction=work.district_name or work.district_code or "District",
+                status="active",
+            )
+
+        # 5. Resolve State Nodal Officer
+        sno_user = None
+        if work.state_code:
+            sno_user = await users_col.find_one(
+                {"role": "state_nodal_officer", "jurisdiction.state_code": re.compile(f"^{re.escape(work.state_code)}$", re.IGNORECASE)},
+                {"_id": 0, "hashed_password": 0}
+            )
+
+        if sno_user:
+            sno_info = StakeholderInfo(
+                role="state_nodal_officer",
+                role_label="State Nodal Officer (Planning Dept)",
+                name=sno_user.get("full_name") or f"State Nodal Officer ({work.state_name or work.state_code})",
+                email=sno_user.get("email") or "sno@samarth.gov.in",
+                user_id=sno_user.get("user_id"),
+                jurisdiction=work.state_name or work.state_code,
+                status="active",
+            )
+        else:
+            sno_info = StakeholderInfo(
+                role="state_nodal_officer",
+                role_label="State Nodal Officer (Planning Dept)",
+                name=f"State Nodal Officer ({work.state_name or work.state_code or 'State'})",
+                email=f"sno.{re.sub(r'[^a-zA-Z0-9]', '', (work.state_code or 'state')).lower()}@samarth.gov.in",
+                jurisdiction=work.state_name or work.state_code or "State",
+                status="active",
+            )
+
+        # Determine Stages & Current Custodian
+        status_val = work.status.value if hasattr(work.status, "value") else str(work.status)
+
+        s1 = StageRoutingInfo(
+            stage_id="mp_recommendation",
+            stage_label="1. MP Project Recommendation",
+            status="completed",
+            active_custodian=mp_info,
+            action_required="Constituency utility proposal submitted to District Authority.",
+            action_ref=f"Work ID: {work.work_id}",
+            completed_at=work.recommended_date or work.created_at,
+            is_current_stage=False,
+        )
+
+        s2_status = "completed"
+        s2_is_curr = False
+        s2_action = f"Administrative Sanction accorded. AS Ref: {work.sanction_order_ref or 'AS-Approved'}."
+        s2_sla = None
+
+        if status_val in ("recommended", "under_review"):
+            s2_status = "in_progress"
+            s2_is_curr = True
+            s2_action = "District Magistrate / Collectorate reviewing technical scrutiny & budget allocation."
+            s2_sla = 45
+        elif status_val == "cancelled" and work.rejection_reason:
+            s2_status = "rejected"
+            s2_action = f"Returned to Hon. MP: {work.rejection_reason}"
+
+        s2 = StageRoutingInfo(
+            stage_id="da_sanction",
+            stage_label="2. District Authority Administrative Sanction (AS)",
+            status=s2_status,
+            active_custodian=da_info,
+            action_required=s2_action,
+            action_ref=work.sanction_order_ref,
+            completed_at=work.sanctioned_date if s2_status == "completed" else None,
+            sla_days_remaining=s2_sla,
+            is_current_stage=s2_is_curr,
+        )
+
+        s3_status = "pending"
+        s3_is_curr = False
+        s3_action = "Awaiting Administrative Sanction before work order issuance."
+        if s2_status == "completed":
+            if status_val in ("sanctioned", "in_progress", "on_hold"):
+                s3_status = "in_progress"
+                s3_is_curr = True
+                s3_action = f"Physical progress at {work.physical_progress_pct}%. Executing line agency recording milestones."
+            elif status_val in ("completed", "under_verification"):
+                s3_status = "completed"
+                s3_action = "Civil construction 100% completed and measurement books finalized."
+
+        s3 = StageRoutingInfo(
+            stage_id="agency_execution",
+            stage_label="3. Implementing Agency Civil Execution",
+            status=s3_status,
+            active_custodian=agency_info,
+            action_required=s3_action,
+            action_ref=work.implementing_agency,
+            completed_at=work.actual_completion_date if s3_status == "completed" else None,
+            is_current_stage=s3_is_curr,
+        )
+
+        has_insp_report = bool(insp_case and (insp_case.get("inspection_reports") or insp_case.get("status") in ("evidence_submitted", "resolved")))
+        s4_status = "pending"
+        s4_is_curr = False
+        s4_action = "On-site GPS geotagged photo inspection pending scheduling."
+        if has_insp_report:
+            s4_status = "completed"
+            s4_action = "Geotagged physical evidence captured, verified, and reconciled."
+        elif insp_case and insp_case.get("status") == "inspection_assigned":
+            s4_status = "in_progress"
+            s4_is_curr = True
+            s4_action = "Field inspector dispatched to site for physical geotagged verification."
+        elif status_val in ("under_verification", "completed"):
+            s4_status = "in_progress"
+            s4_is_curr = True
+            s4_action = "Independent physical audit underway."
+
+        s4 = StageRoutingInfo(
+            stage_id="field_inspection",
+            stage_label="4. Field Inspection & Geotagged Verification",
+            status=s4_status,
+            active_custodian=inspector_info,
+            action_required=s4_action,
+            action_ref=insp_case.get("case_id") if insp_case else None,
+            is_current_stage=s4_is_curr,
+        )
+
+        s5_status = "pending"
+        s5_is_curr = False
+        s5_action = "Final Utilization Certificate (UC) and audit reconciliation pending completion."
+        if status_val == "completed" and s4_status == "completed":
+            s5_status = "completed"
+            s5_action = "Full statutory compliance verified. Project reconciled in eSAKSHI portal."
+        elif status_val in ("completed", "under_verification"):
+            s5_status = "in_progress"
+            s5_is_curr = not (s3_is_curr or s4_is_curr)
+            s5_action = "Reviewing expenditure vouchers and final UC submission."
+
+        s5 = StageRoutingInfo(
+            stage_id="audit_completion",
+            stage_label="5. SNO / MoSPI Audit & Closeout",
+            status=s5_status,
+            active_custodian=sno_info,
+            action_required=s5_action,
+            is_current_stage=s5_is_curr,
+        )
+
+        stages = [s1, s2, s3, s4, s5]
+        current_stage = next((s for s in stages if s.is_current_stage), None)
+        if not current_stage:
+            current_stage = s2 if s2.status != "completed" else (s3 if s3.status != "completed" else s4)
+
+        return WorkRoutingResponse(
+            work_id=work.work_id,
+            work_title=work.title,
+            current_status=work.status,
+            category=work.category,
+            sanctioned_amount=work.sanctioned_amount,
+            district_code=work.district_code,
+            district_name=work.district_name,
+            state_code=work.state_code,
+            constituency=work.constituency,
+            originating_mp=mp_info,
+            district_authority=da_info,
+            implementing_agency=agency_info,
+            assigned_inspector=inspector_info,
+            state_nodal_officer=sno_info,
+            current_custodian=current_stage.active_custodian,
+            current_stage_id=current_stage.stage_id,
+            current_action_required=current_stage.action_required,
+            stages=stages,
+        )
+
+    async def dispatch_work_inspection(
+        self,
+        work_id: str,
+        data: DirectInspectionDispatchRequest,
+        *,
+        actor_user_id: str,
+        ip_address: str = "",
+        user_agent: str = "",
+        jurisdiction_filter: Optional[dict[str, Any]] = None,
+    ) -> dict[str, Any]:
+        """Dispatch a field inspector directly to a work site."""
+        work = await self.get_work(work_id, jurisdiction_filter=jurisdiction_filter)
+        if not work:
+            raise ValueError("Work not found in your jurisdiction")
+
+        users_col = self._db.get_collection("users")
+        cases_col = self._db.get_collection("cases")
+
+        inspector_user = None
+        if data.inspector_user_id:
+            inspector_user = await users_col.find_one({"user_id": data.inspector_user_id, "role": "inspector", "is_active": True})
+        if not inspector_user and work.district_code:
+            inspector_user = await users_col.find_one({"role": "inspector", "jurisdiction.district_code": re.compile(f"^{re.escape(work.district_code)}$", re.IGNORECASE), "is_active": True})
+        if not inspector_user and work.state_code:
+            inspector_user = await users_col.find_one({"role": "inspector", "jurisdiction.state_code": re.compile(f"^{re.escape(work.state_code)}$", re.IGNORECASE), "is_active": True})
+        if not inspector_user:
+            inspector_user = await users_col.find_one({"role": "inspector", "is_active": True})
+
+        if not inspector_user:
+            raise ValueError("No active field inspector available in this jurisdiction to dispatch.")
+
+        case_id = f"CASE-INSP-{uuid4().hex[:8].upper()}"
+        now = datetime.now(timezone.utc)
+
+        # Update inspector's assigned_task_ids
+        j = dict(inspector_user.get("jurisdiction") or {})
+        tasks = list(j.get("assigned_task_ids") or [])
+        if case_id not in tasks:
+            tasks.append(case_id)
+            j["assigned_task_ids"] = tasks
+            await users_col.update_one({"user_id": inspector_user["user_id"]}, {"$set": {"jurisdiction": j, "updated_at": now}})
+
+        case_doc = {
+            "case_id": case_id,
+            "work_id": work_id,
+            "source_type": "manual",
+            "title": f"Field Inspection: {work.title[:50]}",
+            "description": data.instructions,
+            "status": "inspection_assigned",
+            "severity": "high" if data.priority in ("urgent", "critical") else "medium",
+            "owner_user_id": actor_user_id,
+            "assigned_inspector_id": inspector_user["user_id"],
+            "state_code": work.state_code,
+            "district_code": work.district_code,
+            "created_by": actor_user_id,
+            "created_at": now,
+            "updated_at": now,
+            "events": [
+                {
+                    "event_id": str(uuid4()),
+                    "event_type": "inspection_assigned",
+                    "actor_user_id": actor_user_id,
+                    "reason": data.instructions,
+                    "details": {"inspector_user_id": inspector_user["user_id"], "milestone_stage": data.milestone_stage},
+                    "created_at": now,
+                }
+            ],
+        }
+        await cases_col.insert_one(case_doc)
+
+        timeline_event = TimelineEvent(
+            event_id=str(uuid4()),
+            timestamp=now,
+            event_type="inspection_dispatched",
+            title="Field Inspection Dispatched",
+            description=f"Field inspector {inspector_user.get('full_name')} ({inspector_user.get('email')}) assigned for on-site verification (Case Ref: {case_id}). Milestone: {data.milestone_stage}.",
+            actor=actor_user_id,
+        )
+
+        update_dict: dict[str, Any] = {"active_case_id": case_id, "updated_at": now}
+        await self._collection.update_one(
+            {"work_id": work_id},
+            {"$set": update_dict, "$push": {"timeline": timeline_event.model_dump()}}
+        )
+
+        await self._audit.log_event(
+            AuditEventType.INSPECTION_ASSIGNED,
+            user_id=actor_user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            resource_type="work",
+            resource_id=work_id,
+            details={"case_id": case_id, "inspector_user_id": inspector_user["user_id"]},
+        )
+
+        try:
+            notif_svc = NotificationService(self._db)
+            await notif_svc.create_event(
+                recipient_user_id=inspector_user["user_id"],
+                event_type=NotificationEventType.INSPECTOR_ASSIGNED,
+                resource_type="case",
+                resource_id=case_id,
+                idempotency_key=f"insp_disp_{case_id}",
+                title=f"Site Inspection Dispatched: {work.title[:40]}",
+                message=f"You have been assigned for physical site verification in {work.district_name or work.district_code}. Instructions: {data.instructions}",
+            )
+        except Exception as e:
+            logger.warning("Failed to notify inspector %s: %s", inspector_user["user_id"], e)
+
+        return {
+            "case_id": case_id,
+            "work_id": work_id,
+            "inspector_user_id": inspector_user["user_id"],
+            "inspector_name": inspector_user.get("full_name"),
+            "inspector_email": inspector_user.get("email"),
+            "status": "inspection_assigned",
+            "message": f"Inspection successfully dispatched to {inspector_user.get('full_name')} ({inspector_user.get('email')}). Case ID: {case_id}.",
+        }
+
 
 def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
     """Return true only for finite WGS84 latitude/longitude coordinate pairs."""
@@ -909,3 +1741,25 @@ def _valid_coordinates(latitude: Any, longitude: Any) -> bool:
     except (TypeError, ValueError):
         return False
     return math.isfinite(lat) and math.isfinite(lng) and -90 <= lat <= 90 and -180 <= lng <= 180
+
+
+def _haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the great circle distance between two points on the earth in meters."""
+    r = 6371000.0  # Earth radius in meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = (math.sin(delta_phi / 2.0) ** 2 +
+         math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2)
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r * c
+
+
+def _text_similarity(str1: str, str2: str) -> float:
+    """Calculate token overlap Jaccard similarity between two strings."""
+    words1 = set(re.findall(r"\w+", (str1 or "").lower()))
+    words2 = set(re.findall(r"\w+", (str2 or "").lower()))
+    if not words1 or not words2:
+        return 0.0
+    return len(words1 & words2) / float(len(words1 | words2))

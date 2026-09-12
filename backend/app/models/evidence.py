@@ -57,6 +57,9 @@ class CloudinaryUploadCompleteRequest(BaseModel):
     public_id: str = Field(min_length=1, max_length=300)
     filename: str = Field(min_length=1, max_length=255)
     content_type: str = Field(default="image/jpeg", max_length=100)
+    gps_latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    gps_longitude: Optional[float] = Field(default=None, ge=-180, le=180)
+    captured_at: Optional[datetime] = None
 
 
 class EvidenceMetadataOverride(BaseModel):

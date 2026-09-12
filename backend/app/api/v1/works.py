@@ -38,8 +38,14 @@ from app.core.rate_limit import get_client_ip
 from app.core.permissions import Permission, check_jurisdiction, has_permission
 from app.models.user import UserInDB, UserRole
 from app.models.work import (
+    DirectInspectionDispatchRequest,
+    DuplicateWarning,
+    MapWorkMarkerResponse,
+    MPEntitlementSummaryResponse,
     PaymentTrancheCreateRequest,
     PaymentTrancheResponse,
+    PreSubmissionDuplicateCheckRequest,
+    PreSubmissionDuplicateCheckResponse,
     ProgressUpdateCreateRequest,
     ProgressUpdateResponse,
     TimelineEventResponse,
@@ -48,7 +54,9 @@ from app.models.work import (
     WorkDetailResponse,
     WorkListResponse,
     WorkMapResponse,
-    MapWorkMarkerResponse,
+    WorkRejectRecommendationRequest,
+    WorkRoutingResponse,
+    WorkSanctionRequest,
     WorkStatus,
     WorkStatusUpdateRequest,
     WorkSummaryResponse,
@@ -299,6 +307,57 @@ async def create_work(
     )
 
 
+# ── Pre-Submission Duplicate Check ───────────────────────────────
+
+
+@router.post(
+    "/check-duplicate",
+    response_model=PreSubmissionDuplicateCheckResponse,
+    summary="Check for spatial/title duplicate works before submission",
+    description="Validates that a proposed work does not violate the 50m spatial proximity rule or duplicate existing works.",
+)
+async def check_duplicate_work(
+    body: PreSubmissionDuplicateCheckRequest,
+    user: UserInDB = Depends(require_permissions(Permission.READ_WORKS)),
+    db: Database = Depends(get_database),
+):
+    svc = WorkService(db)
+    if not body.state_code and user.jurisdiction.state_code:
+        body.state_code = user.jurisdiction.state_code
+    if not body.constituency and user.jurisdiction.constituency:
+        body.constituency = user.jurisdiction.constituency
+    return await svc.check_pre_submission_duplicate(body)
+
+
+# ── MP Entitlement & Quota Telemetry ─────────────────────────────
+
+
+@router.get(
+    "/mp/entitlement-summary",
+    response_model=MPEntitlementSummaryResponse,
+    summary="MPLADS ₹5.00 Cr Entitlement & Quota Telemetry",
+    description="Returns ₹5.00 Cr annual entitlement progress, SC (15%) and ST (7.5%) statutory quota meters, and committed balances.",
+)
+async def get_mp_entitlement(
+    constituency: Optional[str] = Query(default=None, description="Optional constituency override for admins"),
+    state_code: Optional[str] = Query(default=None, description="Optional state code override"),
+    user: UserInDB = Depends(require_permissions(Permission.READ_WORKS)),
+    db: Database = Depends(get_database),
+):
+    svc = WorkService(db)
+    target_constituency = constituency or user.jurisdiction.constituency
+    target_state = state_code or user.jurisdiction.state_code
+    target_mp_id = user.user_id if user.role == UserRole.MP else None
+    target_mp_name = user.full_name if user.role == UserRole.MP else None
+
+    return await svc.get_mp_entitlement_summary(
+        constituency=target_constituency,
+        mp_id=target_mp_id,
+        mp_name=target_mp_name,
+        state_code=target_state,
+    )
+
+
 # ── Get Work Detail ──────────────────────────────────────────────
 
 
@@ -408,6 +467,136 @@ async def update_work_status(
     if not work:
         raise HTTPException(status_code=404, detail="Work not found")
     return WorkDetailResponse(**work.model_dump())
+
+
+# ── MP Recommendation Sanction / Rejection ───────────────────────
+
+
+@router.post(
+    "/{work_id}/sanction",
+    response_model=WorkDetailResponse,
+    summary="Grant Administrative Sanction to MP Recommendation",
+    description="District Authority accords statutory Administrative Sanction (AS) to an MP-recommended project.",
+)
+async def sanction_work(
+    work_id: str,
+    request: Request,
+    body: WorkSanctionRequest,
+    user: UserInDB = Depends(require_permissions(Permission.WRITE_WORKS)),
+    jfilter: dict = Depends(get_jurisdiction_filter),
+    db: Database = Depends(get_database),
+):
+    if user.role not in (UserRole.DISTRICT_AUTHORITY, UserRole.ADMIN, UserRole.MOSPI):
+        raise HTTPException(
+            status_code=403,
+            detail="Under MPLADS statutory guidelines, only District Authorities (Collector/DM) or Administrators can accord Administrative Sanction.",
+        )
+    svc = WorkService(db)
+    try:
+        work = await svc.sanction_work(
+            work_id,
+            body,
+            user_id=user.user_id,
+            ip_address=_get_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            jurisdiction_filter=jfilter,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not work:
+        raise HTTPException(status_code=404, detail="Work not found or outside your jurisdiction.")
+    return WorkDetailResponse(**work.model_dump())
+
+
+@router.post(
+    "/{work_id}/reject-recommendation",
+    response_model=WorkDetailResponse,
+    summary="Reject or return MP recommendation",
+    description="District Authority returns or rejects an MP recommendation with statutory rationale.",
+)
+async def reject_recommendation(
+    work_id: str,
+    request: Request,
+    body: WorkRejectRecommendationRequest,
+    user: UserInDB = Depends(require_permissions(Permission.WRITE_WORKS)),
+    jfilter: dict = Depends(get_jurisdiction_filter),
+    db: Database = Depends(get_database),
+):
+    if user.role not in (UserRole.DISTRICT_AUTHORITY, UserRole.ADMIN, UserRole.MOSPI):
+        raise HTTPException(
+            status_code=403,
+            detail="Under MPLADS statutory guidelines, only District Authorities or Administrators can return/reject project recommendations.",
+        )
+    svc = WorkService(db)
+    try:
+        work = await svc.reject_recommendation(
+            work_id,
+            body,
+            user_id=user.user_id,
+            ip_address=_get_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            jurisdiction_filter=jfilter,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not work:
+        raise HTTPException(status_code=404, detail="Work not found or outside your jurisdiction.")
+    return WorkDetailResponse(**work.model_dump())
+
+
+# ── Work Governance & Request Routing ────────────────────────────
+
+
+@router.get(
+    "/{work_id}/routing",
+    response_model=WorkRoutingResponse,
+    summary="Get Multi-Stakeholder Request Routing & Custodian Chain",
+    description="Resolves originating MP, District Authority, Implementing Agency, Field Inspector, and SNO with active custodian ballot and SLA tracking.",
+)
+async def get_work_routing(
+    work_id: str,
+    user: UserInDB = Depends(require_permissions(Permission.READ_WORKS)),
+    jfilter: dict = Depends(get_jurisdiction_filter),
+    db: Database = Depends(get_database),
+):
+    svc = WorkService(db)
+    routing = await svc.get_work_routing(work_id, jurisdiction_filter=jfilter)
+    if not routing:
+        raise HTTPException(status_code=404, detail="Work not found or outside your jurisdiction.")
+    return routing
+
+
+@router.post(
+    "/{work_id}/dispatch-inspection",
+    summary="Dispatch Field Inspection to Technical Inspector",
+    description="District Authority or Agency dispatches an on-site geotagged inspection task.",
+)
+async def dispatch_work_inspection(
+    work_id: str,
+    body: DirectInspectionDispatchRequest,
+    request: Request,
+    user: UserInDB = Depends(require_permissions(Permission.WRITE_WORKS)),
+    jfilter: dict = Depends(get_jurisdiction_filter),
+    db: Database = Depends(get_database),
+):
+    if user.role not in (UserRole.DISTRICT_AUTHORITY, UserRole.ADMIN, UserRole.MOSPI, UserRole.AGENCY):
+        raise HTTPException(
+            status_code=403,
+            detail="Only District Authorities, Administrators, or Implementing Agencies can dispatch field inspections.",
+        )
+    svc = WorkService(db)
+    try:
+        result = await svc.dispatch_work_inspection(
+            work_id,
+            body,
+            actor_user_id=user.user_id,
+            ip_address=_get_ip(request),
+            user_agent=request.headers.get("user-agent", ""),
+            jurisdiction_filter=jfilter,
+        )
+        return result
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ── Delete (Soft) Work ───────────────────────────────────────────

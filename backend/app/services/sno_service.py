@@ -371,6 +371,8 @@ class SNOService:
         district_code = work.get("district_code") or f"{state_code}-LKO"
         district_name = work.get("district_name") or "District"
 
+        case_id = f"CASE-SNO-{memo_token}"
+
         escalation_doc = {
             "escalation_id": str(uuid.uuid4()),
             "work_id": work_id,
@@ -391,21 +393,164 @@ class SNOService:
         }
         await self.db.get_collection("escalations").insert_one(escalation_doc)
 
-        # Dispatch in-app notification to District Authority
-        notification_doc = {
-            "notification_id": str(uuid.uuid4()),
-            "idempotency_key": f"sno-dm-notice-{work_id}-{uuid.uuid4().hex[:8]}",
-            "role": "district_authority",
-            "district_code": district_code,
-            "title": f"🚨 FORMAL SNO DIRECTIVE: {memo_ref}",
-            "message": f"State Nodal Officer has issued an administrative show-cause notice for delayed project '{work.get('title')}'. Mandatory compliance report due by {cure_date.strftime('%d-%b-%Y')}.",
-            "severity": "critical",
-            "resource_type": "work",
-            "resource_id": work_id,
-            "read_at": None,
-            "created_at": now_iso,
+        # Update work in works collection with SNO memo status and append to timeline
+        timeline_event = {
+            "event_id": str(uuid.uuid4()),
+            "event_type": "sno_directive",
+            "title": f"🚨 SNO Show-Cause Memo: {memo_ref}",
+            "description": payload.custom_remarks
+            or f"Statutory Show-Cause Notice issued under MPLADS Section 8.4 by State Nodal Officer. Compliance required within {payload.statutory_deadline_days} days.",
+            "actor": issued_by_name,
+            "timestamp": now_iso,
         }
-        await self.db.get_collection("notifications").insert_one(notification_doc)
+        await self.db.get_collection("works").update_one(
+            {"$or": [{"work_id": work_id}, {"_id": work_id}]},
+            {
+                "$set": {
+                    "sno_notice_issued": True,
+                    "latest_memo_ref": memo_ref,
+                    "cure_deadline": cure_date.isoformat(),
+                    "notice_issued_at": now_iso,
+                    "escalation_level": "sno_administrative_notice",
+                    "active_case_id": case_id,
+                    "updated_at": now_iso,
+                },
+                "$push": {
+                    "timeline": timeline_event,
+                },
+            },
+        )
+
+        # Find target District Authority users in state/district
+        da_cursor = self.db.get_collection("users").find({
+            "role": "district_authority",
+            "is_active": True,
+        })
+        all_da_users = await da_cursor.to_list(length=100)
+
+        matched_das = [
+            u for u in all_da_users
+            if u.get("jurisdiction", {}).get("state_code", "").upper() == state_code
+            and u.get("jurisdiction", {}).get("district_code", "").upper() == district_code.upper()
+        ]
+        if not matched_das:
+            matched_das = [
+                u for u in all_da_users
+                if u.get("jurisdiction", {}).get("state_code", "").upper() == state_code
+            ]
+        if not matched_das and all_da_users:
+            matched_das = all_da_users
+
+        primary_da_user_id = matched_das[0].get("user_id") if matched_das else None
+
+        # Create or update case in cases collection
+        existing_case = await self.db.get_collection("cases").find_one({"work_id": work_id})
+        if existing_case:
+            case_id = existing_case.get("case_id")
+            await self.db.get_collection("cases").update_one(
+                {"case_id": case_id},
+                {
+                    "$set": {
+                        "status": "escalated",
+                        "severity": "critical",
+                        "due_date": cure_date,
+                        "source_id": memo_ref,
+                        "state_code": state_code,
+                        "district_code": district_code,
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    "$push": {
+                        "comments": {
+                            "comment_id": str(uuid.uuid4()),
+                            "author_user_id": issued_by_name,
+                            "text": f"OFFICIAL SNO DIRECTIVE ({memo_ref}): Statutory Show-Cause Notice issued under MPLADS Section 8.4. Compliance required by {cure_date.strftime('%d-%b-%Y')}. {payload.custom_remarks or ''}",
+                            "created_at": datetime.now(timezone.utc),
+                        },
+                        "events": {
+                            "event_id": str(uuid.uuid4()),
+                            "event_type": "sno_directive_escalated",
+                            "actor_user_id": issued_by_name,
+                            "reason": "Statutory delay threshold breached under Section 8.4",
+                            "details": {"memo_reference": memo_ref, "statutory_deadline": cure_date.isoformat()},
+                            "created_at": datetime.now(timezone.utc),
+                        },
+                    },
+                },
+            )
+        else:
+            case_doc = {
+                "case_id": case_id,
+                "work_id": work_id,
+                "source_type": "risk_alert",
+                "source_id": memo_ref,
+                "title": f"🚨 SNO Directive ({memo_ref}): {work.get('title')}",
+                "description": payload.custom_remarks
+                or f"Statutory Show-Cause Notice issued under MPLADS Section 8.4 by State Nodal Officer. Project is delayed by {work.get('days_delayed', 60)} days. Mandatory physical remediation plan and compliance report required within {payload.statutory_deadline_days} days.",
+                "status": "escalated",
+                "severity": "critical",
+                "owner_user_id": primary_da_user_id,
+                "assigned_inspector_id": None,
+                "due_date": cure_date,
+                "corrective_plan": None,
+                "clarification_requests": [],
+                "document_requests": [],
+                "comments": [{
+                    "comment_id": str(uuid.uuid4()),
+                    "author_user_id": issued_by_name,
+                    "text": f"OFFICIAL SNO DIRECTIVE ({memo_ref}): Dispatched to District Magistrate. Cure deadline: {cure_date.strftime('%d-%b-%Y')}. Directive: {payload.custom_remarks or 'Expedite project execution.'}",
+                    "created_at": datetime.now(timezone.utc),
+                }],
+                "inspection_reports": [],
+                "events": [{
+                    "event_id": str(uuid.uuid4()),
+                    "event_type": "sno_directive_escalated",
+                    "actor_user_id": issued_by_name,
+                    "reason": "Statutory delay threshold breached under Section 8.4",
+                    "details": {"memo_reference": memo_ref, "statutory_deadline": cure_date.isoformat()},
+                    "created_at": datetime.now(timezone.utc),
+                }],
+                "state_code": state_code,
+                "district_code": district_code,
+                "anomaly_category": "statutory_delay_escalation",
+                "target_authority_role": "district_authority",
+                "target_authority_name": f"District Magistrate ({district_name})",
+                "created_by": "state_nodal_officer",
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
+            }
+            await self.db.get_collection("cases").insert_one(case_doc)
+
+        # Dispatch in-app notifications to all relevant District Authority users
+        for da_user in matched_das:
+            da_uid = da_user.get("user_id")
+            # 1. Header NotificationBell collection (notifications)
+            notification_doc = {
+                "notification_id": str(uuid.uuid4()),
+                "recipient_user_id": da_uid,
+                "event_type": "case_escalated",
+                "title": f"🚨 FORMAL SNO DIRECTIVE: {memo_ref}",
+                "message": f"State Nodal Officer has issued an administrative show-cause notice for delayed project '{work.get('title')}'. Mandatory compliance report due by {cure_date.strftime('%d-%b-%Y')}.",
+                "resource_type": "case",
+                "resource_id": case_id,
+                "idempotency_key": f"sno-dm-notice-{work_id}-{da_uid}-{memo_token}",
+                "in_app_visible": True,
+                "read_at": None,
+                "created_at": datetime.now(timezone.utc),
+            }
+            await self.db.get_collection("notifications").insert_one(notification_doc)
+
+            # 2. Cases page notification alert collection (case_notifications)
+            case_notif_doc = {
+                "notification_id": str(uuid.uuid4()),
+                "recipient_user_id": da_uid,
+                "case_id": case_id,
+                "work_id": work_id,
+                "title": f"🚨 FORMAL SNO DIRECTIVE: {memo_ref}",
+                "message": f"State Nodal Officer issued show-cause notice: '{work.get('title')}'. Remediation due: {cure_date.strftime('%d-%b-%Y')}.",
+                "read_at": None,
+                "created_at": datetime.now(timezone.utc),
+            }
+            await self.db.get_collection("case_notifications").insert_one(case_notif_doc)
 
         # Write immutable audit log
         audit_entry = {
@@ -417,6 +562,7 @@ class SNOService:
             "district_code": district_code,
             "work_id": work_id,
             "memo_reference": memo_ref,
+            "case_id": case_id,
             "cure_deadline": cure_date.isoformat(),
             "timestamp": now_iso,
         }

@@ -121,7 +121,7 @@ class EvidenceVerificationService:
         return EvidenceUploadSignatureResponse(
             evidence_id=evidence_id,
             storage_mode=EvidenceStorageMode.CLOUDINARY,
-            upload_url=f"https://api.cloudinary.com/v1_1/{cloud_name}/image/authenticated/upload",
+            upload_url=f"https://api.cloudinary.com/v1_1/{cloud_name}/image/upload",
             api_key=api_key,
             timestamp=timestamp,
             signature=signature,
@@ -140,6 +140,9 @@ class EvidenceVerificationService:
         content_type: str,
         content: bytes,
         uploaded_by: str,
+        client_latitude: Optional[float] = None,
+        client_longitude: Optional[float] = None,
+        client_captured_at: Optional[datetime] = None,
         ip_address: str = "",
         user_agent: str = "",
     ) -> EvidenceVerificationResponse:
@@ -161,6 +164,9 @@ class EvidenceVerificationService:
             storage_mode=EvidenceStorageMode.LOCAL_DEMO,
             storage_reference=str(storage_path.relative_to(LOCAL_EVIDENCE_ROOT.parent)),
             uploaded_by=uploaded_by,
+            client_latitude=client_latitude,
+            client_longitude=client_longitude,
+            client_captured_at=client_captured_at,
         )
         await self._audit_upload(record, uploaded_by, ip_address, user_agent)
         return _safe_response(record)
@@ -239,6 +245,9 @@ class EvidenceVerificationService:
                 storage_mode=EvidenceStorageMode.CLOUDINARY,
                 storage_reference=request.public_id,
                 uploaded_by=uploaded_by,
+                client_latitude=request.gps_latitude,
+                client_longitude=request.gps_longitude,
+                client_captured_at=request.captured_at,
             )
         except Exception as exc:
             # The authenticated asset is never returned to the caller. A failed fetch is
@@ -417,6 +426,9 @@ class EvidenceVerificationService:
         storage_mode: EvidenceStorageMode,
         storage_reference: str,
         uploaded_by: str,
+        client_latitude: Optional[float] = None,
+        client_longitude: Optional[float] = None,
+        client_captured_at: Optional[datetime] = None,
         metadata_override: Optional[EvidenceMetadataOverride] = None,
         demo_seed: bool = False,
         demo_scenario: str = "",
@@ -426,8 +438,24 @@ class EvidenceVerificationService:
         gps_latitude = analysis["gps_latitude"]
         gps_longitude = analysis["gps_longitude"]
         captured_at = analysis["captured_at"]
-        exif_fields = analysis["exif_fields"]
+        exif_fields = list(analysis["exif_fields"])
         metadata_source = "embedded_exif" if analysis["metadata_available"] else "unavailable"
+
+        # If image bytes lacked EXIF GPS (e.g., canvas-watermarked live photo or mobile web capture),
+        # use verified device GPS coordinates captured by the field inspector's device.
+        if gps_latitude is None and client_latitude is not None and client_longitude is not None:
+            gps_latitude = float(client_latitude)
+            gps_longitude = float(client_longitude)
+            metadata_source = "device_geotag"
+            if "GPS (device geotag)" not in exif_fields:
+                exif_fields = sorted(set(exif_fields + ["GPS (device geotag)"]))
+
+        if captured_at is None and client_captured_at is not None:
+            captured_at = _as_utc(client_captured_at)
+            metadata_source = "device_geotag" if metadata_source == "device_geotag" else "device_timestamp"
+            if "DateTimeOriginal (device)" not in exif_fields:
+                exif_fields = sorted(set(exif_fields + ["DateTimeOriginal (device)"]))
+
         if metadata_override:
             if metadata_override.gps_latitude is not None and metadata_override.gps_longitude is not None:
                 gps_latitude, gps_longitude = metadata_override.gps_latitude, metadata_override.gps_longitude

@@ -310,6 +310,79 @@ export default function CasesPage() {
         }
       />
 
+      {/* SNO Administrative Directives Urgent Banner */}
+      {(() => {
+        const snoDirectives = cases.filter(
+          (c) =>
+            c.status === "escalated" ||
+            (c.source_id && c.source_id.startsWith("SNO/")) ||
+            (c.case_id && c.case_id.startsWith("CASE-SNO")) ||
+            c.anomaly_category === "statutory_delay_escalation"
+        );
+        if (snoDirectives.length === 0) return null;
+
+        return (
+          <div className="rounded-xl border-2 border-rose-400 bg-gradient-to-r from-rose-50 via-rose-100/60 to-amber-50 p-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-rose-200">
+              <div className="flex items-center gap-2">
+                <span className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+                </span>
+                <span className="text-sm font-bold text-rose-900 tracking-wide uppercase">
+                  🚨 State Nodal Officer (SNO) Directives & Show-Cause Notices ({snoDirectives.length} Active)
+                </span>
+              </div>
+              <Badge className="bg-rose-700 hover:bg-rose-800 text-white text-xs px-2.5 py-0.5 w-fit">
+                Statutory Action Required under Section 8.4
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs text-rose-800 leading-relaxed">
+              The State Government has dispatched formal administrative show-cause memos requiring the District Authority to submit a verified physical remediation schedule and statutory compliance report.
+            </p>
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+              {snoDirectives.map((item) => (
+                <div
+                  key={item.case_id}
+                  className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-white/90 p-3 shadow-xs hover:border-rose-400 transition-all"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-mono text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded">
+                        {item.source_id || item.case_id}
+                      </span>
+                      {item.district_code && (
+                        <Badge variant="outline" className="text-[10px] text-slate-600 border-slate-300">
+                          {item.district_code}
+                        </Badge>
+                      )}
+                      <Badge className="bg-rose-100 text-rose-800 border-rose-200 text-[10px]">
+                        CRITICAL ESCALATION
+                      </Badge>
+                    </div>
+                    <div className="mt-1 text-xs font-semibold text-slate-900 truncate">
+                      {item.title}
+                    </div>
+                    {item.due_date && (
+                      <div className="mt-0.5 text-[11px] text-amber-700 font-medium">
+                        ⏱️ Statutory Cure Deadline: {formatDateTime(item.due_date)}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => router.push(`/dashboard/cases/${item.case_id}`)}
+                    className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shrink-0 shadow-xs"
+                  >
+                    Respond →
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Notifications Alert */}
       {notifications.length > 0 && (
         <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
@@ -540,70 +613,113 @@ export default function CasesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredCases.map((item) => (
-                  <tr key={item.case_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-3">
-                      <strong className="block text-slate-900 text-sm font-semibold">{item.title}</strong>
-                      <span className="text-[11px] font-mono text-slate-400">ID: {item.case_id}</span>
-                    </td>
-                    <td className="p-3">
-                      <span className="font-mono text-slate-600 block">{item.work_id.slice(0, 12)}…</span>
-                      <span className="text-[11px] text-slate-400">
-                        Source: {item.source_type}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <Badge variant="outline" className="bg-blue-50 text-blue-800 border-blue-200">
-                        {STATUS_LABELS[item.status] || item.status}
-                      </Badge>
-                      {item.inspection_reports && item.inspection_reports.length > 0 && (
-                        <span className="block mt-1 text-[11px] text-slate-500">
-                          {item.inspection_reports.length} report(s)
+                {filteredCases.map((item) => {
+                  const isSno =
+                    (item.source_id && item.source_id.startsWith("SNO/")) ||
+                    item.case_id.startsWith("CASE-SNO") ||
+                    item.anomaly_category === "statutory_delay_escalation";
+
+                  return (
+                    <tr
+                      key={item.case_id}
+                      className={`hover:bg-slate-50 transition-colors ${
+                        isSno ? "bg-rose-50/30" : ""
+                      }`}
+                    >
+                      <td className="p-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <strong className="text-slate-900 text-sm font-semibold">{item.title}</strong>
+                          {isSno && (
+                            <Badge className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold py-0">
+                              🚨 SNO DIRECTIVE
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[11px] font-mono text-slate-400">ID: {item.case_id}</span>
+                          {item.district_code && (
+                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 border border-slate-200 px-1.5 rounded">
+                              {item.district_code}
+                            </span>
+                          )}
+                          {isSno && item.source_id && (
+                            <span className="text-[10px] font-mono font-bold text-rose-700 bg-rose-100/70 border border-rose-200 px-1.5 rounded">
+                              Memo: {item.source_id}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-mono text-slate-600 block">{item.work_id.slice(0, 12)}…</span>
+                        <span className="text-[11px] text-slate-400">
+                          Source: {item.source_type}
                         </span>
-                      )}
-                    </td>
-                    <td className="p-3">
-                      <Badge
-                        variant="secondary"
-                        className={
-                          item.severity === "critical"
-                            ? "bg-rose-100 text-rose-800 border-rose-200"
-                            : item.severity === "high"
-                            ? "bg-amber-100 text-amber-800 border-amber-200"
-                            : item.severity === "medium"
-                            ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                            : "bg-emerald-100 text-emerald-800 border-emerald-200"
-                        }
-                      >
-                        {item.severity}
-                      </Badge>
-                    </td>
-                    <td className="p-3 text-slate-600">
-                      {item.assigned_inspector_id ? (
-                        <span className="font-medium text-slate-800">{item.assigned_inspector_id}</span>
-                      ) : (
-                        <span className="text-slate-400 italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="p-3 text-slate-500">
-                      <div>{formatDateTime(item.updated_at)}</div>
-                      {item.due_date && (
-                        <div className="text-[11px] text-amber-700">Due: {formatDateTime(item.due_date)}</div>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => router.push("/dashboard/cases/" + item.case_id)}
-                        className="text-xs"
-                      >
-                        Open Case
-                        <ChevronRight className="ml-1 h-3.5 w-3.5" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-3">
+                        <Badge
+                          variant="outline"
+                          className={
+                            item.status === "escalated"
+                              ? "bg-rose-100 text-rose-800 border-rose-300 font-bold"
+                              : "bg-blue-50 text-blue-800 border-blue-200"
+                          }
+                        >
+                          {STATUS_LABELS[item.status] || item.status}
+                        </Badge>
+                        {item.inspection_reports && item.inspection_reports.length > 0 && (
+                          <span className="block mt-1 text-[11px] text-slate-500">
+                            {item.inspection_reports.length} report(s)
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            item.severity === "critical"
+                              ? "bg-rose-100 text-rose-800 border-rose-200 font-semibold"
+                              : item.severity === "high"
+                              ? "bg-amber-100 text-amber-800 border-amber-200"
+                              : item.severity === "medium"
+                              ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                              : "bg-emerald-100 text-emerald-800 border-emerald-200"
+                          }
+                        >
+                          {item.severity}
+                        </Badge>
+                      </td>
+                      <td className="p-3 text-slate-600">
+                        {item.assigned_inspector_id ? (
+                          <span className="font-medium text-slate-800">{item.assigned_inspector_id}</span>
+                        ) : (
+                          <span className="text-slate-400 italic">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="p-3 text-slate-500">
+                        <div>{formatDateTime(item.updated_at)}</div>
+                        {item.due_date && (
+                          <div className={`text-[11px] ${isSno ? "text-rose-700 font-semibold" : "text-amber-700"}`}>
+                            Due: {formatDateTime(item.due_date)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 text-right">
+                        <Button
+                          variant={isSno ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => router.push("/dashboard/cases/" + item.case_id)}
+                          className={`text-xs ${
+                            isSno
+                              ? "bg-rose-600 hover:bg-rose-700 text-white font-semibold"
+                              : ""
+                          }`}
+                        >
+                          {isSno ? "Respond →" : "View"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

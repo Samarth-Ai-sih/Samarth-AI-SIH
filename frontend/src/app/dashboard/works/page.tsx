@@ -12,9 +12,9 @@ import {
   formatDate,
   WorkCategory,
 } from "@/lib/api";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, Suspense } from "react";
 
 const WorkExplorerMap = dynamic(
   () => import("@/components/maps/work-explorer-map").then((module) => module.WorkExplorerMap),
@@ -56,6 +56,8 @@ const PAGE_SIZES = [10, 20, 50];
 export default function WorksListPage() {
   const { user, fetchWithAuth, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlStatus = searchParams?.get("status") || "";
 
   // Data state
   const [works, setWorks] = useState<WorkSummary[]>([]);
@@ -67,7 +69,7 @@ export default function WorksListPage() {
   // Filters
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [statusFilter, setStatusFilter] = useState<string>(urlStatus);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [riskTierFilter, setRiskTierFilter] = useState<string>("");
   const [stateCodeFilter, setStateCodeFilter] = useState("");
@@ -76,6 +78,15 @@ export default function WorksListPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+
+  // Sync URL parameter if it changes
+  useEffect(() => {
+    const s = searchParams?.get("status");
+    if (s !== null && s !== undefined && s !== statusFilter) {
+      setStatusFilter(s);
+      setPage(1);
+    }
+  }, [searchParams]);
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -223,6 +234,111 @@ export default function WorksListPage() {
     <div style={s.pageWrap}>
       <div style={s.container}>
         <Header user={user} onBack={() => router.push("/dashboard")} />
+
+        {/* ── Quick Filter Tabs ────────────────────────────── */}
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap", alignItems: "center" }}>
+          <button
+            type="button"
+            onClick={() => { setStatusFilter(""); setRiskTierFilter(""); setPage(1); }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              border: statusFilter === "" && riskTierFilter === "" ? "1px solid #2563eb" : "1px solid #cbd5e1",
+              backgroundColor: statusFilter === "" && riskTierFilter === "" ? "#eff6ff" : "#ffffff",
+              color: statusFilter === "" && riskTierFilter === "" ? "#1d4ed8" : "#475569",
+              transition: "all 0.15s ease",
+            }}
+          >
+            All Works
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStatusFilter("recommended"); setRiskTierFilter(""); setPage(1); }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.4rem",
+              border: statusFilter === "recommended" ? "1px solid #7c3aed" : "1px solid #cbd5e1",
+              backgroundColor: statusFilter === "recommended" ? "#f5f3ff" : "#ffffff",
+              color: statusFilter === "recommended" ? "#6d28d9" : "#475569",
+              boxShadow: statusFilter === "recommended" ? "0 1px 4px rgba(124, 58, 237, 0.2)" : "none",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span>📋 MP Recommendations (Pending Sanction)</span>
+            <span
+              style={{
+                fontSize: "0.68rem",
+                padding: "1px 6px",
+                borderRadius: "10px",
+                backgroundColor: statusFilter === "recommended" ? "#7c3aed" : "#f1f5f9",
+                color: statusFilter === "recommended" ? "#ffffff" : "#64748b",
+                fontWeight: 700,
+              }}
+            >
+              Actionable
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStatusFilter("sanctioned"); setRiskTierFilter(""); setPage(1); }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              border: statusFilter === "sanctioned" ? "1px solid #0284c7" : "1px solid #cbd5e1",
+              backgroundColor: statusFilter === "sanctioned" ? "#f0f9ff" : "#ffffff",
+              color: statusFilter === "sanctioned" ? "#0369a1" : "#475569",
+              transition: "all 0.15s ease",
+            }}
+          >
+            🏛️ Sanctioned
+          </button>
+          <button
+            type="button"
+            onClick={() => { setStatusFilter("in_progress"); setRiskTierFilter(""); setPage(1); }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              border: statusFilter === "in_progress" ? "1px solid #16a34a" : "1px solid #cbd5e1",
+              backgroundColor: statusFilter === "in_progress" ? "#f0fdf4" : "#ffffff",
+              color: statusFilter === "in_progress" ? "#15803d" : "#475569",
+              transition: "all 0.15s ease",
+            }}
+          >
+            🔨 In Progress
+          </button>
+          <button
+            type="button"
+            onClick={() => { setRiskTierFilter("red"); setStatusFilter(""); setPage(1); }}
+            style={{
+              padding: "0.4rem 0.85rem",
+              borderRadius: "20px",
+              fontSize: "0.78rem",
+              fontWeight: 650,
+              cursor: "pointer",
+              border: riskTierFilter === "red" ? "1px solid #dc2626" : "1px solid #cbd5e1",
+              backgroundColor: riskTierFilter === "red" ? "#fef2f2" : "#ffffff",
+              color: riskTierFilter === "red" ? "#b91c1c" : "#475569",
+              transition: "all 0.15s ease",
+            }}
+          >
+            ⚠️ High Risk (Red Tier)
+          </button>
+        </div>
 
         {/* ── Search & Filters ──────────────────────────────── */}
         <div style={s.filtersRow}>
@@ -386,6 +502,24 @@ export default function WorksListPage() {
                           <span style={{ ...s.badge, color: sc.color, background: sc.bg, borderColor: sc.border }}>
                             {sc.label}
                           </span>
+                          {w.status === "recommended" && (
+                            <div style={{ fontSize: "0.68rem", color: "#d97706", marginTop: "0.25rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "#f59e0b" }} />
+                              Routed: DA Review
+                            </div>
+                          )}
+                          {(w.status === "sanctioned" || w.status === "in_progress") && (
+                            <div style={{ fontSize: "0.68rem", color: "#2563eb", marginTop: "0.25rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "#3b82f6" }} />
+                              Routed: {w.implementing_agency ? (w.implementing_agency.length > 16 ? w.implementing_agency.slice(0, 16) + "…" : w.implementing_agency) : "Agency"}
+                            </div>
+                          )}
+                          {w.status === "completed" && (
+                            <div style={{ fontSize: "0.68rem", color: "#16a34a", marginTop: "0.25rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                              <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%", background: "#16a34a" }} />
+                              Audited & Closed
+                            </div>
+                          )}
                         </td>
                         <td style={s.td}>
                           <div style={s.tdPrimary}>{w.district_name}</div>

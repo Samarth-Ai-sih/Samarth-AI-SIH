@@ -152,6 +152,12 @@ class MemoryDatabase:
 
 
 def _matches(document, query):
+    if "$or" in query:
+        or_branches = query["$or"]
+        sub_query = {k: v for k, v in query.items() if k != "$or"}
+        if not _matches(document, sub_query):
+            return False
+        return any(_matches(document, branch) for branch in or_branches)
     for field, expected in query.items():
         actual = document.get(field)
         if isinstance(expected, dict):

@@ -46,8 +46,13 @@ def _context(request: Request) -> dict[str, str]:
     return {"ip_address": _get_ip(request), "user_agent": request.headers.get("user-agent", "")}
 
 
-async def _manager_case_or_404(service: CaseManagementService, case_id: str, jurisdiction_filter: dict) -> CaseResponse:
-    case = await service.get_case_for_manager(case_id, jurisdiction_filter=jurisdiction_filter)
+async def _manager_case_or_404(
+    service: CaseManagementService,
+    case_id: str,
+    jurisdiction_filter: dict,
+    user: Optional[UserInDB] = None,
+) -> CaseResponse:
+    case = await service.get_case_for_manager(case_id, jurisdiction_filter=jurisdiction_filter, user=user)
     if not case:
         raise HTTPException(status_code=404, detail="Case not found in your jurisdiction")
     return case
@@ -81,6 +86,7 @@ async def list_cases(
 ):
     cases, total, total_pages = await CaseManagementService(db).list_cases(
         jurisdiction_filter=jurisdiction_filter, status=status, severity=severity, page=page, page_size=page_size,
+        current_user=user,
     )
     return CaseListResponse(cases=cases, total=total, page=page, page_size=page_size, total_pages=total_pages)
 
@@ -180,7 +186,7 @@ async def get_case(
     jurisdiction_filter: dict = Depends(get_jurisdiction_filter),
     db: Database = Depends(get_database),
 ):
-    return await _manager_case_or_404(CaseManagementService(db), case_id, jurisdiction_filter)
+    return await _manager_case_or_404(CaseManagementService(db), case_id, jurisdiction_filter, user)
 
 
 @router.get("/{case_id}/assignees", response_model=list[CaseAssignee], summary="List compatible owners or inspectors for a case")
@@ -192,7 +198,7 @@ async def list_case_assignees(
     db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     return await service.list_assignees_for_case(case_id, inspector_only=inspectors_only)
 
 
@@ -202,7 +208,7 @@ async def acknowledge_case(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.acknowledge(case_id, actor=user.user_id, reason=body.reason if body else "", **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case cannot be acknowledged from its current state")
     return updated
@@ -214,7 +220,7 @@ async def begin_case_review(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.begin_review(case_id, actor=user.user_id, reason=body.reason if body else "", **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case cannot enter review from its current state")
     return updated
@@ -226,7 +232,7 @@ async def add_case_comment(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.add_comment(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=404, detail="Case not found")
     return updated
@@ -238,7 +244,7 @@ async def request_case_clarification(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.request_clarification(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
     return updated
@@ -250,7 +256,7 @@ async def request_case_documents(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     service = CaseManagementService(db)
-    await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.request_clarification(case_id, body, actor=user.user_id, documents=True, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
     return updated
@@ -261,7 +267,7 @@ async def assign_case_owner(
     case_id: str, body: CaseAssignmentRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     try: updated = await service.assign_owner(case_id, body, actor=user.user_id, **_context(request))
     except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
@@ -273,7 +279,7 @@ async def assign_case_inspector(
     case_id: str, body: CaseAssignmentRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     try: updated = await service.assign_inspector(case_id, body, actor=user.user_id, **_context(request))
     except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
@@ -285,7 +291,7 @@ async def create_case_corrective_plan(
     case_id: str, body: CaseCorrectivePlanRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     try: updated = await service.create_corrective_plan(case_id, body, actor=user.user_id, **_context(request))
     except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
@@ -297,7 +303,7 @@ async def set_case_due_date(
     case_id: str, body: CaseDueDateRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.set_due_date(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
     return updated
@@ -308,7 +314,7 @@ async def change_case_severity(
     case_id: str, body: CaseSeverityRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     try: updated = await service.change_severity(case_id, body, actor=user.user_id, **_context(request))
     except ValueError as exc: raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
@@ -320,7 +326,7 @@ async def resolve_case(
     case_id: str, body: CaseReasonRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.resolve(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is already closed")
     return updated
@@ -332,7 +338,7 @@ async def mark_case_in_progress(
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
     """District Authority reviews field inspection: marks work actively in progress, updates citizen report, and notifies State Nodal Officer."""
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.mark_reviewed_in_progress(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is already closed")
     return updated
@@ -343,7 +349,7 @@ async def reject_case(
     case_id: str, body: CaseReasonRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.reject(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is already closed")
     return updated
@@ -354,7 +360,7 @@ async def escalate_case(
     case_id: str, body: CaseReasonRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.escalate(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Case is closed")
     return updated
@@ -365,7 +371,7 @@ async def reopen_case(
     case_id: str, body: CaseReasonRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.reopen(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=409, detail="Only resolved, rejected, or escalated cases may be reopened")
     return updated
@@ -376,7 +382,7 @@ async def override_case(
     case_id: str, body: CaseOverrideRequest, request: Request,
     user: UserInDB = Depends(manager_dep), jurisdiction_filter: dict = Depends(get_jurisdiction_filter), db: Database = Depends(get_database),
 ):
-    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter)
+    service = CaseManagementService(db); await _manager_case_or_404(service, case_id, jurisdiction_filter, user)
     updated = await service.override(case_id, body, actor=user.user_id, **_context(request))
     if not updated: raise HTTPException(status_code=404, detail="Case not found")
     return updated

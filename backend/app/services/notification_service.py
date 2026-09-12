@@ -42,6 +42,9 @@ SAFE_CONTENT: dict[NotificationEventType, tuple[str, str]] = {
     NotificationEventType.CITIZEN_ISSUE_RAISED: ("New citizen issue reported", "A citizen reported a ground concern for a work in your jurisdiction."),
     NotificationEventType.CASE_COMPLETED: ("Notice: Case Completed & Resolved", "District Authority has verified field inspection and officially marked the case completed."),
     NotificationEventType.CASE_RESOLVED: ("Case resolved", "A case in your jurisdiction has been officially resolved."),
+    NotificationEventType.MP_WORK_RECOMMENDED: ("New MP Recommendation Received", "A new community work recommendation has been submitted by MP awaiting administrative sanction."),
+    NotificationEventType.MP_WORK_SANCTIONED: ("MP Recommendation Sanctioned", "Your recommended work has been granted Administrative Sanction by the District Authority."),
+    NotificationEventType.MP_WORK_REJECTED: ("MP Recommendation Update", "The District Authority has requested clarification or returned your recommended work."),
 }
 
 

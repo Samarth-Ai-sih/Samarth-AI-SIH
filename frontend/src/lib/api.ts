@@ -84,6 +84,10 @@ export interface WorkSummary {
   recommended_date: string | null;
   sanctioned_date: string | null;
   expected_completion_date: string | null;
+  sc_st_quota_type?: "sc" | "st" | "general" | null;
+  recommended_by_mp_id?: string | null;
+  sanction_order_ref?: string | null;
+  rejection_reason?: string | null;
   created_at: string;
 }
 
@@ -101,6 +105,11 @@ export interface WorkDetail extends WorkSummary {
   timeline: TimelineEvent[];
   created_by: string;
   updated_at: string;
+  sno_notice_issued?: boolean | null;
+  latest_memo_ref?: string | null;
+  cure_deadline?: string | null;
+  notice_issued_at?: string | null;
+  active_case_id?: string | null;
 }
 
 export interface WorkListResponse {
@@ -110,6 +119,58 @@ export interface WorkListResponse {
   page_size: number;
   total_pages: number;
 }
+
+export interface StakeholderInfo {
+  role: string;
+  role_label: string;
+  name: string;
+  email: string;
+  user_id?: string | null;
+  jurisdiction?: string | null;
+  phone?: string | null;
+  status: string;
+}
+
+export interface StageRoutingInfo {
+  stage_id: string;
+  stage_label: string;
+  status: "completed" | "in_progress" | "pending" | "rejected";
+  active_custodian?: StakeholderInfo | null;
+  action_required: string;
+  action_ref?: string | null;
+  completed_at?: string | null;
+  sla_days_remaining?: number | null;
+  is_current_stage: boolean;
+}
+
+export interface WorkRoutingResponse {
+  work_id: string;
+  work_title: string;
+  current_status: WorkStatus;
+  category: WorkCategory;
+  sanctioned_amount: number;
+  district_code: string;
+  district_name: string;
+  state_code: string;
+  constituency: string;
+  originating_mp?: StakeholderInfo | null;
+  district_authority?: StakeholderInfo | null;
+  implementing_agency?: StakeholderInfo | null;
+  assigned_inspector?: StakeholderInfo | null;
+  state_nodal_officer?: StakeholderInfo | null;
+  current_custodian?: StakeholderInfo | null;
+  current_stage_id: string;
+  current_action_required: string;
+  stages: StageRoutingInfo[];
+}
+
+export interface DirectInspectionDispatchRequest {
+  inspector_user_id?: string | null;
+  milestone_stage?: string;
+  instructions?: string;
+  priority?: "routine" | "urgent" | "critical";
+}
+
 
 /** A bounded, internal map marker returned by /api/v1/works/map. */
 export interface MapWorkMarker {
@@ -586,6 +647,8 @@ export interface CaseRecord {
   specific_questions?: string[];
   anomaly_metrics?: Record<string, any>;
   verification_finding?: string | null;
+  state_code?: string | null;
+  district_code?: string | null;
 }
 export interface CaseListResponse { cases: CaseRecord[]; total: number; page: number; page_size: number; total_pages: number; }
 export interface CaseAssignee { user_id: string; full_name: string; role: string; state_code: string | null; district_code: string | null; }

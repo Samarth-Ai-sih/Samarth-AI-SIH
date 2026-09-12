@@ -14,6 +14,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
 import { WorkLocationMap } from "@/components/maps/work-location-map";
 import { ProjectStoryDossier } from "@/components/works/project-story-dossier";
+import { WorkRoutingTracker } from "@/components/works/work-routing-tracker";
 
 // ── Component ───────────────────────────────────────────────────
 
@@ -30,6 +31,33 @@ export default function Work360Page() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"story" | "records">("story");
+
+  // MP Recommendation & DA Sanction state
+  const [isSanctionModalOpen, setIsSanctionModalOpen] = useState(false);
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [sanctionAgency, setSanctionAgency] = useState("");
+  const [sanctionOrderRef, setSanctionOrderRef] = useState("");
+  const [sanctionAmount, setSanctionAmount] = useState("");
+  const [sanctionRemarks, setSanctionRemarks] = useState("");
+  const [rejectionReason, setRejectionReason] = useState("");
+  const [isActionSubmitting, setIsActionSubmitting] = useState(false);
+  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
+
+  // Physical Progress Modal State
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [progressPct, setProgressPct] = useState("");
+  const [progressDesc, setProgressDesc] = useState("");
+
+  // Payment Tranche Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentPurpose, setPaymentPurpose] = useState("");
+
+  // Field Inspection Modal State
+  const [isInspectionModalOpen, setIsInspectionModalOpen] = useState(false);
+  const [inspectionStage, setInspectionStage] = useState("intermediate_progress");
+  const [inspectionInstructions, setInspectionInstructions] = useState("Verify physical progress and capture on-site geotagged photos.");
+  const [inspectionPriority, setInspectionPriority] = useState<"routine" | "urgent">("routine");
 
   const fetchWork = useCallback(async () => {
     setIsLoading(true);
@@ -79,6 +107,160 @@ export default function Work360Page() {
       setIsLoading(false);
     }
   }, [workId, fetchWithAuth]);
+
+  const handleOpenSanctionModal = () => {
+    if (!work) return;
+    setSanctionAmount(work.sanctioned_amount ? String(work.sanctioned_amount) : "");
+    setSanctionOrderRef(`DM-${work.district_code || "VNS"}/MPLADS/${new Date().getFullYear()}/AS-${Math.floor(100 + Math.random() * 900)}`);
+    setSanctionAgency(work.implementing_agency || "Public Works Department (PWD)");
+    setSanctionRemarks("Technical scrutiny completed and approved. Project fulfills MPLADS Chapter 2 guidelines.");
+    setIsSanctionModalOpen(true);
+  };
+
+  const handleGrantSanction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsActionSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/v1/works/${workId}/sanction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sanctioned_amount: parseFloat(sanctionAmount) || (work?.sanctioned_amount || 0),
+          implementing_agency: sanctionAgency,
+          sanction_order_ref: sanctionOrderRef,
+          remarks: sanctionRemarks,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Sanction failed" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setIsSanctionModalOpen(false);
+      setActionSuccessMsg(`Administrative Sanction granted successfully vide Order Ref: ${sanctionOrderRef}. Assigned to ${sanctionAgency}.`);
+      await fetchWork();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to accord Administrative Sanction.");
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
+
+  const handleRejectRecommendation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsActionSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/v1/works/${workId}/reject-recommendation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rejection_reason: rejectionReason,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Rejection failed" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setIsRejectModalOpen(false);
+      setActionSuccessMsg(`Work proposal returned / rejected with official statutory notice.`);
+      await fetchWork();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to return recommendation.");
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
+
+  const handleRecordProgress = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsActionSubmitting(true);
+    try {
+      const pct = parseFloat(progressPct);
+      if (isNaN(pct) || pct < 0 || pct > 100) {
+        throw new Error("Physical progress percentage must be between 0 and 100");
+      }
+      const res = await fetchWithAuth(`/api/v1/works/${workId}/progress`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          physical_progress_pct: pct,
+          description: progressDesc,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Failed to record progress" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setIsProgressModalOpen(false);
+      setProgressDesc("");
+      setActionSuccessMsg(`Physical progress updated to ${pct.toFixed(0)}% successfully.`);
+      await fetchWork();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to record physical progress.");
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
+
+  const handleReleasePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsActionSubmitting(true);
+    try {
+      const amt = parseFloat(paymentAmount);
+      if (isNaN(amt) || amt <= 0) {
+        throw new Error("Payment amount must be greater than zero");
+      }
+      const res = await fetchWithAuth(`/api/v1/works/${workId}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: amt,
+          purpose: paymentPurpose,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Failed to disburse payment" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      setIsPaymentModalOpen(false);
+      setPaymentAmount("");
+      setPaymentPurpose("");
+      setActionSuccessMsg(`Payment tranche of ₹${amt.toLocaleString("en-IN")} released successfully.`);
+      await fetchWork();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to release payment tranche.");
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
+
+  const handleDispatchInspection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!work) return;
+    setIsActionSubmitting(true);
+    try {
+      const res = await fetchWithAuth(`/api/v1/works/${workId}/dispatch-inspection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          milestone_stage: inspectionStage,
+          instructions: inspectionInstructions,
+          priority: inspectionPriority,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "Inspection dispatch failed" }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setIsInspectionModalOpen(false);
+      setActionSuccessMsg(`Field inspection successfully dispatched to ${data.inspector_name || "Technical Inspector"} (Case Ref: ${data.case_id}).`);
+      await fetchWork();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to dispatch field inspection.");
+    } finally {
+      setIsActionSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -250,6 +432,230 @@ export default function Work360Page() {
 
         <RiskAlert score={riskScore} />
 
+        {work.sno_notice_issued && (
+          <div
+            style={{
+              marginTop: "1rem",
+              padding: "1rem 1.25rem",
+              borderRadius: "8px",
+              backgroundColor: "#fff1f2",
+              border: "2px solid #fda4af",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <span style={{ fontSize: "1.1rem" }}>🚨</span>
+                <strong style={{ fontSize: "0.875rem", color: "#9f1239" }}>
+                  Active State Nodal Officer (SNO) Show-Cause Directive: {work.latest_memo_ref || "Formal Administrative Memo"}
+                </strong>
+                <span
+                  style={{
+                    fontSize: "0.7rem",
+                    fontWeight: 700,
+                    padding: "0.15rem 0.5rem",
+                    borderRadius: "9999px",
+                    backgroundColor: "#e11d48",
+                    color: "#ffffff",
+                    letterSpacing: "0.025em",
+                  }}
+                >
+                  STATUTORY ESCALATION
+                </span>
+              </div>
+              <p style={{ margin: "0.35rem 0 0", fontSize: "0.8rem", color: "#881337", lineHeight: 1.4 }}>
+                A formal administrative notice was issued under MPLADS Guidelines Section 8.4 due to delay thresholds overshoot.
+                {work.cure_deadline && ` Mandatory physical compliance remediation due by ${formatDate(work.cure_deadline)}.`}
+              </p>
+            </div>
+            {work.active_case_id && (
+              <button
+                type="button"
+                onClick={() => router.push(`/dashboard/cases/${work.active_case_id}`)}
+                style={{
+                  padding: "0.45rem 0.85rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 600,
+                  backgroundColor: "#e11d48",
+                  color: "#ffffff",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                View Case Dossier →
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ── Multi-Stakeholder Request Routing & Custodian Stepper ── */}
+        <WorkRoutingTracker
+          workId={workId}
+          onOpenSanctionModal={handleOpenSanctionModal}
+          onOpenInspectionModal={() => setIsInspectionModalOpen(true)}
+          onOpenProgressModal={() => {
+            setProgressPct(String(work.physical_progress_pct || 50));
+            setProgressDesc("");
+            setIsProgressModalOpen(true);
+          }}
+        />
+
+        {/* ── MP Recommendation & District Authority Sanctioning Banner ── */}
+        {(work.status === "recommended" || work.status === "under_review") && (
+          <div
+            style={{
+              marginTop: "1rem",
+              padding: "1.25rem",
+              borderRadius: "12px",
+              backgroundColor: "#f0fdf4",
+              border: "2px solid #86efac",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+            }}
+          >
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem" }}>
+              <div style={{ maxWidth: "680px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "1.25rem" }}>📋</span>
+                  <strong style={{ fontSize: "0.95rem", color: "#14532d" }}>
+                    Hon&apos;ble MP Project Recommendation Awaiting Administrative Sanction (AS)
+                  </strong>
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 700,
+                      padding: "0.15rem 0.55rem",
+                      borderRadius: "9999px",
+                      backgroundColor: "#16a34a",
+                      color: "#ffffff",
+                    }}
+                  >
+                    PENDING DA ACTION
+                  </span>
+                  {work.sc_st_quota_type && work.sc_st_quota_type !== "general" && (
+                    <span
+                      style={{
+                        fontSize: "0.7rem",
+                        fontWeight: 700,
+                        padding: "0.15rem 0.55rem",
+                        borderRadius: "9999px",
+                        backgroundColor: "#e0e7ff",
+                        color: "#3730a3",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {work.sc_st_quota_type} Quota Asset
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ marginTop: "0.6rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "0.5rem", fontSize: "0.78rem", color: "#166534" }}>
+                  <div>
+                    <span style={{ opacity: 0.75 }}>Recommended by:</span>{" "}
+                    <strong>{work.mp_name || "Hon. Member of Parliament"}</strong>
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.75 }}>Constituency:</span>{" "}
+                    <strong>{work.constituency || work.district_name}</strong>
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.75 }}>Proposed Outlay:</span>{" "}
+                    <strong style={{ fontSize: "0.85rem" }}>{formatCurrency(work.sanctioned_amount)}</strong>
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.75 }}>Recommendation Date:</span>{" "}
+                    <strong>{work.recommended_date ? formatDate(work.recommended_date) : "Recent"}</strong>
+                  </div>
+                </div>
+
+                {work.description && (
+                  <p style={{ margin: "0.75rem 0 0", fontSize: "0.8rem", color: "#14532d", lineHeight: 1.4, backgroundColor: "rgba(255,255,255,0.6)", padding: "0.5rem 0.75rem", borderRadius: "6px", border: "1px solid #bbf7d0" }}>
+                    <strong>Public Utility Need:</strong> {work.description}
+                  </p>
+                )}
+              </div>
+
+              {/* Action buttons for DA and Admin */}
+              {(user?.role === "district_authority" || user?.role === "admin" || user?.role === "mospi") && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", minWidth: "200px" }}>
+                  <button
+                    type="button"
+                    onClick={handleOpenSanctionModal}
+                    style={{
+                      padding: "0.6rem 1rem",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      backgroundColor: "#15803d",
+                      color: "#ffffff",
+                      borderRadius: "8px",
+                      border: "none",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "0.35rem",
+                      boxShadow: "0 1px 2px rgba(0,0,0,0.1)",
+                    }}
+                  >
+                    ✓ Grant Administrative Sanction
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRejectionReason("Proposal requires revised cost estimate / site clearance from municipal authorities.");
+                      setIsRejectModalOpen(true);
+                    }}
+                    style={{
+                      padding: "0.45rem 1rem",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      backgroundColor: "#ffffff",
+                      color: "#b91c1c",
+                      borderRadius: "8px",
+                      border: "1px solid #fca5a5",
+                      cursor: "pointer",
+                      textAlign: "center",
+                    }}
+                  >
+                    ✕ Return / Request Clarification
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {actionSuccessMsg && (
+          <div
+            style={{
+              marginTop: "0.75rem",
+              padding: "0.75rem 1rem",
+              borderRadius: "8px",
+              backgroundColor: "#ecfdf5",
+              border: "1px solid #6ee7b7",
+              color: "#065f46",
+              fontSize: "0.8rem",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>✓ {actionSuccessMsg}</span>
+            <button
+              onClick={() => setActionSuccessMsg(null)}
+              style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 700 }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* ── View Mode Selector ─────────────────────────── */}
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1.25rem", marginBottom: "1.5rem", borderBottom: "1px solid #e2e8f0", paddingBottom: "0.75rem" }}>
           <button
@@ -375,10 +781,38 @@ export default function Work360Page() {
 
         {/* ── Payment Tranches ────────────────────────────── */}
         <div style={s.card}>
-          <h3 style={s.cardTitle}>
-            Payment Tranches
-            <span style={s.countBadge}>{work.payment_tranches.length}</span>
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h3 style={{ ...s.cardTitle, margin: 0 }}>
+              Payment Tranches
+              <span style={s.countBadge}>{work.payment_tranches.length}</span>
+            </h3>
+            {(user?.role === "district_authority" || user?.role === "admin") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentAmount("");
+                  setPaymentPurpose(`Tranche #${work.payment_tranches.length + 1} disbursement for civil milestone`);
+                  setIsPaymentModalOpen(true);
+                }}
+                style={{
+                  padding: "0.4rem 0.85rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  backgroundColor: "#0284c7",
+                  color: "#ffffff",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                }}
+              >
+                + Disburse Payment Tranche
+              </button>
+            )}
+          </div>
           {work.payment_tranches.length === 0 ? (
             <p style={s.emptyText}>No payment tranches recorded yet</p>
           ) : (
@@ -413,10 +847,38 @@ export default function Work360Page() {
 
         {/* ── Progress Updates ────────────────────────────── */}
         <div style={s.card}>
-          <h3 style={s.cardTitle}>
-            Progress Updates
-            <span style={s.countBadge}>{work.progress_updates.length}</span>
-          </h3>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+            <h3 style={{ ...s.cardTitle, margin: 0 }}>
+              Progress Updates
+              <span style={s.countBadge}>{work.progress_updates.length}</span>
+            </h3>
+            {(user?.role === "agency" || user?.role === "district_authority" || user?.role === "admin") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setProgressPct(String(work.physical_progress_pct));
+                  setProgressDesc("");
+                  setIsProgressModalOpen(true);
+                }}
+                style={{
+                  padding: "0.4rem 0.85rem",
+                  fontSize: "0.75rem",
+                  fontWeight: 700,
+                  backgroundColor: "#16a34a",
+                  color: "#ffffff",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.35rem",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+                }}
+              >
+                + Record Physical Progress
+              </button>
+            )}
+          </div>
           {work.progress_updates.length === 0 ? (
             <p style={s.emptyText}>No progress updates recorded yet</p>
           ) : (
@@ -527,6 +989,820 @@ export default function Work360Page() {
           )}
         </div>
           </>
+        )}
+
+        {/* ── Administrative Sanction Modal ── */}
+        {isSanctionModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "1rem",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "560px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", backgroundColor: "#f8fafc", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#0f172a" }}>
+                    Grant Administrative Sanction (AS)
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#64748b" }}>
+                    Accord statutory sanction order and allocate implementing agency under MPLADS guidelines.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSanctionModalOpen(false)}
+                  style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#64748b" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleGrantSanction} style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Sanction Order Reference *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={sanctionOrderRef}
+                      onChange={(e) => setSanctionOrderRef(e.target.value)}
+                      placeholder="e.g. DM-VNS/MPLADS/2026/AS-101"
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        fontFamily: "monospace",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Implementing Agency *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={sanctionAgency}
+                      onChange={(e) => setSanctionAgency(e.target.value)}
+                      placeholder="e.g. Public Works Department (PWD)"
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                        marginBottom: "0.4rem",
+                      }}
+                    />
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                      {["PWD", "UP Jal Nigam", "Rural Engineering Services (RES)", "CPWD", "Municipal Corporation"].map((agency) => (
+                        <button
+                          key={agency}
+                          type="button"
+                          onClick={() => setSanctionAgency(agency)}
+                          style={{
+                            padding: "0.2rem 0.5rem",
+                            fontSize: "0.68rem",
+                            borderRadius: "4px",
+                            backgroundColor: sanctionAgency === agency ? "#dbeafe" : "#f1f5f9",
+                            color: sanctionAgency === agency ? "#1e40af" : "#475569",
+                            border: "1px solid",
+                            borderColor: sanctionAgency === agency ? "#93c5fd" : "#e2e8f0",
+                            cursor: "pointer",
+                          }}
+                        >
+                          {agency}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Sanctioned Outlay (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      required
+                      value={sanctionAmount}
+                      onChange={(e) => setSanctionAmount(e.target.value)}
+                      placeholder="Amount in Rupees"
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Scrutiny & Technical Sanction Remarks
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={sanctionRemarks}
+                      onChange={(e) => setSanctionRemarks(e.target.value)}
+                      placeholder="Enter technical scrutiny details or committee notes..."
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.82rem",
+                        boxSizing: "border-box",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsSanctionModalOpen(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting}
+                    style={{
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: isActionSubmitting ? "#94a3b8" : "#16a34a",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: isActionSubmitting ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    {isActionSubmitting ? "Issuing AS Order..." : "✓ Confirm & Issue AS Order"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Rejection / Clarification Modal ── */}
+        {isRejectModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "1rem",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "540px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", backgroundColor: "#fff1f2", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#9f1239" }}>
+                    Return / Reject Recommendation
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#881337" }}>
+                    Provide statutory justification for returning this recommendation to the Hon&apos;ble MP.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRejectModalOpen(false)}
+                  style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#64748b" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleRejectRecommendation} style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Select Preset Rationale
+                    </label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                      {[
+                        "Proposal requires revised cost estimate / detailed technical DPR from municipal engineer.",
+                        "Proposed asset location conflicts with existing Master Plan / NHAI road widening.",
+                        "Asset does not fall within eligible MPLADS Chapter 5 permissible work schedules.",
+                        "Proposed site is private / disputed property and lacks title deed clearance.",
+                      ].map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setRejectionReason(preset)}
+                          style={{
+                            textAlign: "left",
+                            padding: "0.35rem 0.6rem",
+                            fontSize: "0.72rem",
+                            borderRadius: "6px",
+                            backgroundColor: rejectionReason === preset ? "#fee2e2" : "#f8fafc",
+                            color: rejectionReason === preset ? "#991b1b" : "#475569",
+                            border: "1px solid",
+                            borderColor: rejectionReason === preset ? "#fca5a5" : "#e2e8f0",
+                            cursor: "pointer",
+                          }}
+                        >
+                          • {preset}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Statutory Rejection Rationale *
+                    </label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="State the formal reasons citing relevant MPLADS operational guidelines..."
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.82rem",
+                        boxSizing: "border-box",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsRejectModalOpen(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting || !rejectionReason.trim()}
+                    style={{
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: isActionSubmitting || !rejectionReason.trim() ? "#94a3b8" : "#dc2626",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: isActionSubmitting || !rejectionReason.trim() ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    {isActionSubmitting ? "Returning..." : "✕ Confirm Rejection / Return"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Record Physical Progress Modal ── */}
+        {isProgressModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "1rem",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "520px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", backgroundColor: "#f0fdf4", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#166534" }}>
+                    Record Physical Progress Update
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#15803d" }}>
+                    Update the executing civil milestone for {work.title}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsProgressModalOpen(false)}
+                  style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#64748b" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleRecordProgress} style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Cumulative Physical Progress Percentage (%) *
+                    </label>
+                    <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={progressPct}
+                        onChange={(e) => setProgressPct(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          required
+                          value={progressPct}
+                          onChange={(e) => setProgressPct(e.target.value)}
+                          style={{
+                            width: "70px",
+                            padding: "0.45rem",
+                            borderRadius: "6px",
+                            border: "1px solid #cbd5e1",
+                            fontSize: "0.9rem",
+                            fontWeight: 700,
+                            textAlign: "center",
+                          }}
+                        />
+                        <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#64748b" }}>%</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Milestone / Execution Description *
+                    </label>
+                    <textarea
+                      rows={4}
+                      required
+                      value={progressDesc}
+                      onChange={(e) => setProgressDesc(e.target.value)}
+                      placeholder="Describe work completed at this milestone (e.g. Earthwork and foundation completed; masonry in progress)..."
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.82rem",
+                        boxSizing: "border-box",
+                        resize: "vertical",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsProgressModalOpen(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting || !progressDesc.trim()}
+                    style={{
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: isActionSubmitting || !progressDesc.trim() ? "#94a3b8" : "#16a34a",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: isActionSubmitting || !progressDesc.trim() ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    {isActionSubmitting ? "Recording..." : "✓ Submit Progress Update"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Disburse Payment Tranche Modal ── */}
+        {isPaymentModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "1rem",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "520px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", backgroundColor: "#f0f9ff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#0369a1" }}>
+                    Disburse Payment Tranche
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#0284c7" }}>
+                    Release funds to {work.implementing_agency || "executing agency"} under sanctioned outlay
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPaymentModalOpen(false)}
+                  style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#64748b" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleReleasePayment} style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div style={{ backgroundColor: "#f8fafc", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid #e2e8f0", fontSize: "0.75rem", display: "flex", justifyContent: "space-between" }}>
+                    <div>
+                      <span style={{ color: "#64748b" }}>Sanctioned Outlay:</span>{" "}
+                      <strong>{formatCurrency(work.sanctioned_amount)}</strong>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b" }}>Already Released:</span>{" "}
+                      <strong style={{ color: "#16a34a" }}>{formatCurrency(work.funds_released)}</strong>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Tranche Amount (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="1"
+                      required
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      placeholder="e.g. 500000"
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Purpose / Milestone Reference *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={paymentPurpose}
+                      onChange={(e) => setPaymentPurpose(e.target.value)}
+                      placeholder="e.g. Tranche 2: Civil structural framework verification"
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.75rem", marginTop: "1.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaymentModalOpen(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting || !paymentAmount}
+                    style={{
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: isActionSubmitting || !paymentAmount ? "#94a3b8" : "#0284c7",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: isActionSubmitting || !paymentAmount ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    {isActionSubmitting ? "Processing..." : "✓ Confirm Tranche Disbursement"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* ── Dispatch Field Inspection Modal ── */}
+        {isInspectionModalOpen && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(15, 23, 42, 0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: "1rem",
+              backdropFilter: "blur(2px)",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                borderRadius: "14px",
+                width: "100%",
+                maxWidth: "520px",
+                boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+                border: "1px solid #e2e8f0",
+                overflow: "hidden",
+              }}
+            >
+              <div style={{ padding: "1.25rem 1.5rem", borderBottom: "1px solid #e2e8f0", backgroundColor: "#faf5ff", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 700, color: "#6b21a8" }}>
+                    Dispatch Technical Field Inspection
+                  </h3>
+                  <p style={{ margin: "0.2rem 0 0", fontSize: "0.75rem", color: "#7e22ce" }}>
+                    Assign on-site GPS geotagged photo inspection task to Field Inspector
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsInspectionModalOpen(false)}
+                  style={{ background: "none", border: "none", fontSize: "1.2rem", cursor: "pointer", color: "#64748b" }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleDispatchInspection} style={{ padding: "1.5rem" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Milestone Inspection Stage
+                    </label>
+                    <select
+                      value={inspectionStage}
+                      onChange={(e) => setInspectionStage(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "0.5rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                      }}
+                    >
+                      <option value="site_clearance">Pre-commencement Site Clearance</option>
+                      <option value="intermediate_progress">Intermediate Milestone Verification</option>
+                      <option value="pre_final_completion">Pre-Final Quality Inspection</option>
+                      <option value="final_completion">Final Completion & Handover Audit</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Priority Level
+                    </label>
+                    <div style={{ display: "flex", gap: "1.5rem" }}>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", cursor: "pointer" }}>
+                        <input
+                          type="radio"
+                          name="insp_priority"
+                          value="routine"
+                          checked={inspectionPriority === "routine"}
+                          onChange={() => setInspectionPriority("routine")}
+                        />
+                        <span>Routine Audit (7 days SLA)</span>
+                      </label>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem", cursor: "pointer", color: "#b91c1c", fontWeight: 600 }}>
+                        <input
+                          type="radio"
+                          name="insp_priority"
+                          value="urgent"
+                          checked={inspectionPriority === "urgent"}
+                          onChange={() => setInspectionPriority("urgent")}
+                        />
+                        <span>Urgent Verification (48 hrs SLA)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "#334155", marginBottom: "0.35rem" }}>
+                      Technical Instructions & Field Checklist *
+                    </label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={inspectionInstructions}
+                      onChange={(e) => setInspectionInstructions(e.target.value)}
+                      placeholder="e.g. Verify quality of civil construction, take mandatory 4-angle geotagged photos, check boundary compliance."
+                      style={{
+                        width: "100%",
+                        padding: "0.55rem 0.75rem",
+                        borderRadius: "8px",
+                        border: "1px solid #cbd5e1",
+                        fontSize: "0.85rem",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ padding: "0.6rem 0.8rem", borderRadius: "8px", backgroundColor: "#faf5ff", border: "1px solid #e9d5ff", fontSize: "0.75rem", color: "#6b21a8" }}>
+                    📸 The designated Field Inspector for this jurisdiction will receive an immediate real-time notification with mobile-friendly GPS evidence upload tasks.
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "1.25rem", display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsInspectionModalOpen(false)}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      borderRadius: "8px",
+                      border: "1px solid #cbd5e1",
+                      backgroundColor: "#ffffff",
+                      color: "#475569",
+                      fontSize: "0.82rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isActionSubmitting}
+                    style={{
+                      padding: "0.5rem 1.25rem",
+                      borderRadius: "8px",
+                      border: "none",
+                      backgroundColor: isActionSubmitting ? "#94a3b8" : "#7e22ce",
+                      color: "#ffffff",
+                      fontSize: "0.82rem",
+                      fontWeight: 700,
+                      cursor: isActionSubmitting ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.4rem",
+                    }}
+                  >
+                    {isActionSubmitting ? "Dispatching..." : "✓ Dispatch Field Inspector"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         )}
 
         <div style={{ height: "3rem" }} />

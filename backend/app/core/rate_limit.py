@@ -57,6 +57,7 @@ async def check_login_rate_limit(request: Request) -> None:
     Raises HTTP 429 with Retry-After header if limit exceeded.
     Used as a FastAPI dependency on the login endpoint.
     """
+    print(">>> INSIDE check_login_rate_limit <<<")
     settings = get_settings()
     await _check_rate_limit(
         request,

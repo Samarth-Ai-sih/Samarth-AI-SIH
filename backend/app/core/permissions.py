@@ -88,6 +88,7 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
 
     UserRole.MP: {
         Permission.READ_WORKS,
+        Permission.WRITE_WORKS,
         Permission.READ_PAYMENTS,
         Permission.READ_RISK,
         # Explicitly: NO write_investigations, NO write_payments

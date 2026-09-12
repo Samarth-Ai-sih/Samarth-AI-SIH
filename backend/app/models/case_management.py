@@ -271,6 +271,8 @@ class CaseResponse(BaseModel):
     specific_questions: list[str] = Field(default_factory=list)
     anomaly_metrics: dict[str, Any] = Field(default_factory=dict)
     verification_finding: Optional[str] = None
+    state_code: str = ""
+    district_code: str = ""
 
 
 class CaseListResponse(BaseModel):

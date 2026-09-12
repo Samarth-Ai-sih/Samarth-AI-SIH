@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth";
 import {
   BarChart3, BriefcaseBusiness, ChevronDown, ChevronLeft, ClipboardCheck, Database, FileWarning, LayoutDashboard,
   LogOut, Menu, SearchCheck, Settings, ShieldAlert, UsersRound, WalletCards, Landmark, TrendingUp,
-  Building2, Flame, AlertTriangle, ArrowLeftRight,
+  Building2, Flame, AlertTriangle, ArrowLeftRight, FileCheck, MapPin,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -28,6 +28,14 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/inspections", label: "Field inspections", icon: ClipboardCheck, roles: ["inspector"] },
   { href: "/dashboard/citizen-reports", label: "Citizen moderation", icon: UsersRound, roles: ["admin", "mospi", "state_nodal_officer", "district_authority"] },
   { href: "/dashboard/analytics", label: "Analytics & reports", icon: BarChart3, roles: ["admin", "mospi", "state_nodal_officer", "mp"] },
+  // --- Implementing Agency Workspace ---
+  { href: "/dashboard/agency", label: "Agency Workspace", icon: Building2, roles: ["agency", "admin"] },
+  // --- MP Constituency Command Center (direct for MP role) ---
+  { href: "/dashboard/mp", label: "Constituency Overview", icon: Landmark, roles: ["mp"] },
+  { href: "/dashboard/mp/recommendations", label: "Recommend Works", icon: BriefcaseBusiness, roles: ["mp"] },
+  { href: "/dashboard/mp/ledger", label: "₹5.00 Cr Fiscal Ledger", icon: WalletCards, roles: ["mp"] },
+  { href: "/dashboard/mp/map", label: "Constituency GIS Map", icon: MapPin, roles: ["mp"] },
+  { href: "/dashboard/mp/dossier", label: "Civic Delivery Dossier", icon: FileCheck, roles: ["mp"] },
   // --- MoSPI National Command Center (direct for MoSPI role) ---
   { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark, roles: ["mospi"] },
   { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3, roles: ["mospi"] },
@@ -41,6 +49,14 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/sno/escalations", label: "Bottleneck Escalations", icon: AlertTriangle, roles: ["state_nodal_officer"] },
   { href: "/dashboard/sno/allocations", label: "Inter-District Allocations", icon: ArrowLeftRight, roles: ["state_nodal_officer"] },
   { href: "/dashboard/sno/inspections-audit", label: "10% Inspection Quota", icon: ClipboardCheck, roles: ["state_nodal_officer"] },
+];
+
+const mpSubItems: NavigationItem[] = [
+  { href: "/dashboard/mp", label: "Constituency Command Center", icon: Landmark },
+  { href: "/dashboard/mp/recommendations", label: "Recommend Works", icon: BriefcaseBusiness },
+  { href: "/dashboard/mp/ledger", label: "₹5.00 Cr Fiscal Ledger", icon: WalletCards },
+  { href: "/dashboard/mp/map", label: "Constituency GIS Map", icon: MapPin },
+  { href: "/dashboard/mp/dossier", label: "Civic Delivery Dossier", icon: FileCheck },
 ];
 
 const mospiSubItems: NavigationItem[] = [
@@ -71,7 +87,13 @@ const ALL_PAGE_TITLES: Record<string, string> = {
   "/dashboard/inspections": "Field inspections",
   "/dashboard/citizen-reports": "Citizen moderation",
   "/dashboard/analytics": "Analytics & reports",
+  "/dashboard/agency": "Implementing Agency Workspace",
   "/dashboard/settings": "Settings",
+  "/dashboard/mp": "MP Constituency Command Center",
+  "/dashboard/mp/recommendations": "Recommend & Track Works",
+  "/dashboard/mp/ledger": "₹5.00 Cr Entitlement & Tranche Ledger",
+  "/dashboard/mp/map": "Constituency GIS Delivery Map",
+  "/dashboard/mp/dossier": "Parliamentary & Civic Delivery Dossier",
   "/dashboard/mospi": "National Command Center",
   "/dashboard/mospi/telemetry": "Macro Fund Telemetry",
   "/dashboard/mospi/benchmarking": "State Benchmarking",
@@ -116,6 +138,7 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
   const [mospiExpanded, setMospiExpanded] = useState(pathname.startsWith("/dashboard/mospi"));
   const [snoExpanded, setSnoExpanded] = useState(pathname.startsWith("/dashboard/sno"));
+  const [mpExpanded, setMpExpanded] = useState(pathname.startsWith("/dashboard/mp"));
 
   useEffect(() => {
     if (pathname.startsWith("/dashboard/mospi")) {
@@ -126,6 +149,12 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (pathname.startsWith("/dashboard/sno")) {
       setSnoExpanded(true);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/mp")) {
+      setMpExpanded(true);
     }
   }, [pathname]);
 
@@ -307,6 +336,65 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                         )}
                       >
                         <SubIcon className={cn("h-3.5 w-3.5 shrink-0", isSubActive ? "text-purple-600" : "text-slate-400")} aria-hidden="true" />
+                        <span className="truncate">{subItem.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* For Admin: Collapsible MP Constituency Command Center Toggle */}
+          {user.role === "admin" && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setMpExpanded(!mpExpanded)}
+                className={cn(
+                  "flex w-full min-h-10 items-center justify-between rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer",
+                  pathname.startsWith("/dashboard/mp")
+                    ? "bg-emerald-50 text-emerald-950 font-semibold border-l-2 border-emerald-600"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                )}
+                aria-expanded={mpExpanded}
+                aria-label="Toggle MP Constituency features"
+              >
+                <div className="flex items-center gap-3">
+                  <Landmark className="h-4 w-4 text-emerald-600 shrink-0" aria-hidden="true" />
+                  <span className="font-semibold">MP Constituency Portal</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-emerald-100/70 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                    5
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 text-slate-400 transition-transform duration-200",
+                      mpExpanded && "rotate-180"
+                    )}
+                  />
+                </div>
+              </button>
+
+              {mpExpanded && (
+                <div className="mt-1 ml-3.5 pl-3 border-l-2 border-emerald-100 space-y-0.5">
+                  {mpSubItems.map((subItem) => {
+                    const SubIcon = subItem.icon;
+                    const isSubActive = pathname === subItem.href || (subItem.href !== "/dashboard/mp" && pathname.startsWith(`${subItem.href}/`));
+                    return (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex min-h-8 items-center gap-2.5 rounded-lg px-2 text-xs font-medium transition-colors",
+                          isSubActive
+                            ? "bg-emerald-100/80 text-emerald-950 font-bold"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                        )}
+                      >
+                        <SubIcon className={cn("h-3.5 w-3.5 shrink-0", isSubActive ? "text-emerald-600" : "text-slate-400")} aria-hidden="true" />
                         <span className="truncate">{subItem.label}</span>
                       </Link>
                     );

@@ -77,6 +77,9 @@ class NotificationEventType(str, Enum):
     CITIZEN_ISSUE_RAISED = "citizen_issue_raised"
     CASE_COMPLETED = "case_completed"
     CASE_RESOLVED = "case_resolved"
+    MP_WORK_RECOMMENDED = "mp_work_recommended"
+    MP_WORK_SANCTIONED = "mp_work_sanctioned"
+    MP_WORK_REJECTED = "mp_work_rejected"
 
 
 class NotificationChannel(str, Enum):

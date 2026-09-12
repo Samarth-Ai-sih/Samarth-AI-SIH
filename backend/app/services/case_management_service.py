@@ -37,7 +37,7 @@ from app.models.case_management import (
     NotificationResponse,
 )
 from app.models.background import NotificationEventType
-from app.models.user import UserRole
+from app.models.user import UserInDB, UserRole
 from app.services.audit_service import AuditService
 from app.services.notification_service import NotificationService
 
@@ -133,12 +133,41 @@ class CaseManagementService:
         severity: Optional[CaseSeverity] = None,
         page: int = 1,
         page_size: int = 25,
+        current_user: Optional[UserInDB] = None,
     ) -> tuple[list[CaseResponse], int, int]:
-        allowed_work_ids = await self._scoped_work_ids(jurisdiction_filter)
-        if not allowed_work_ids:
-            return [], 0, 1
+        import re
+
+        query: dict[str, Any] = {}
+        if current_user and current_user.role in {UserRole.ADMIN, UserRole.MOSPI}:
+            query = {}
+        else:
+            allowed_work_ids = await self._scoped_work_ids(jurisdiction_filter)
+            or_clauses: list[dict[str, Any]] = []
+            if allowed_work_ids:
+                or_clauses.append({"work_id": {"$in": sorted(allowed_work_ids)}})
+            if current_user:
+                or_clauses.append({"owner_user_id": current_user.user_id})
+                if current_user.jurisdiction.district_code:
+                    d_clean = re.escape(current_user.jurisdiction.district_code.strip())
+                    or_clauses.append({"district_code": {"$regex": f"^{d_clean}$", "$options": "i"}})
+                if current_user.jurisdiction.state_code:
+                    s_clean = re.escape(current_user.jurisdiction.state_code.strip())
+                    or_clauses.append({
+                        "state_code": {"$regex": f"^{s_clean}$", "$options": "i"},
+                        "$or": [
+                            {"status": CaseStatus.ESCALATED.value},
+                            {"source_id": {"$regex": "^SNO/", "$options": "i"}},
+                            {"case_id": {"$regex": "^CASE-SNO", "$options": "i"}},
+                            {"anomaly_category": "statutory_delay_escalation"},
+                            {"escalation_level": {"$regex": "sno", "$options": "i"}},
+                        ],
+                    })
+            if not or_clauses:
+                return [], 0, 1
+            query = {"$or": or_clauses}
+
         documents = await self._cases.find(
-            {"work_id": {"$in": sorted(allowed_work_ids)}}, {"_id": 0}
+            query, {"_id": 0}
         ).sort([("updated_at", -1), ("case_id", 1)]).to_list(length=None)
         records = [CaseRecord(**doc) for doc in documents]
         if status:
@@ -174,9 +203,33 @@ class CaseManagementService:
         start = (page - 1) * page_size
         return [_case_response(case) for case in records[start:start + page_size]], total, total_pages
 
-    async def get_case_for_manager(self, case_id: str, *, jurisdiction_filter: dict[str, Any]) -> Optional[CaseResponse]:
+    async def get_case_for_manager(
+        self,
+        case_id: str,
+        *,
+        jurisdiction_filter: dict[str, Any],
+        user: Optional[UserInDB] = None,
+    ) -> Optional[CaseResponse]:
         case = await self._case(case_id)
-        if not case or not await self._work_in_scope(case.work_id, jurisdiction_filter):
+        if not case:
+            return None
+        if user:
+            if user.role in {UserRole.ADMIN, UserRole.MOSPI}:
+                return _case_response(case)
+            if case.owner_user_id == user.user_id:
+                return _case_response(case)
+            if user.jurisdiction.district_code and case.district_code:
+                if _normalize_district(user.jurisdiction.district_code) == _normalize_district(case.district_code):
+                    return _case_response(case)
+            if user.jurisdiction.state_code and (user.jurisdiction.state_code.upper() == (case.state_code or "").upper()):
+                if (
+                    case.status == CaseStatus.ESCALATED
+                    or (case.source_id and case.source_id.startswith("SNO/"))
+                    or case.case_id.startswith("CASE-SNO")
+                    or case.anomaly_category == "statutory_delay_escalation"
+                ):
+                    return _case_response(case)
+        if not await self._work_in_scope(case.work_id, jurisdiction_filter):
             return None
         return _case_response(case)
 
@@ -931,6 +984,7 @@ def _case_response(case: CaseRecord) -> CaseResponse:
         target_authority_name=case.target_authority_name, verification_scope=case.verification_scope,
         specific_questions=case.specific_questions, anomaly_metrics=case.anomaly_metrics,
         verification_finding=case.verification_finding,
+        state_code=case.state_code, district_code=case.district_code,
     )
 
 

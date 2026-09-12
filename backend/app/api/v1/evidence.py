@@ -1,5 +1,4 @@
-"""Phase 12 private evidence upload and verification endpoints."""
-
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
@@ -45,8 +44,22 @@ async def _scoped_work_or_404(
     service: EvidenceVerificationService,
     work_id: str,
     jurisdiction_filter: dict,
+    user: Optional[UserInDB] = None,
+    db: Optional[Database] = None,
 ) -> dict:
     work = await service.work_in_scope(work_id, jurisdiction_filter)
+    if not work and user and db:
+        # Check if user is an inspector assigned to an active case for this work
+        if user.role.value == "inspector":
+            case = await db.get_collection("cases").find_one({
+                "work_id": work_id,
+                "$or": [
+                    {"assigned_inspector_id": user.user_id},
+                    {"case_id": {"$in": user.jurisdiction.assigned_task_ids}},
+                ],
+            })
+            if case:
+                work = await db.get_collection("works").find_one({"work_id": work_id}, {"_id": 0})
     if not work:
         raise HTTPException(status_code=404, detail="Work not found in your jurisdiction")
     return work
@@ -67,7 +80,7 @@ async def issue_upload_signature(
     db: Database = Depends(get_database),
 ):
     service = _service(db)
-    await _scoped_work_or_404(service, body.work_id, jurisdiction_filter)
+    await _scoped_work_or_404(service, body.work_id, jurisdiction_filter, user=user, db=db)
     settings = get_settings()
     try:
         response = service.build_upload_signature(
@@ -96,25 +109,30 @@ async def issue_upload_signature(
     response_model=EvidenceVerificationResponse,
     status_code=201,
     summary="Upload and verify local demo evidence",
-    description="Available only when Cloudinary is not configured. The stored file is private and never served by this API.",
+    description="Available only when Cloudinary is not configured or in development mode. The stored file is private and never served by this API.",
 )
 async def upload_local_demo_evidence(
     request: Request,
     work_id: str = Form(...),
     file: UploadFile = File(...),
+    latitude: Optional[float] = Form(None),
+    longitude: Optional[float] = Form(None),
+    captured_at: Optional[str] = Form(None),
     user: UserInDB = Depends(require_permissions(Permission.WRITE_EVIDENCE)),
     _rate_limit: None = Depends(check_upload_rate_limit),
     jurisdiction_filter: dict = Depends(get_jurisdiction_filter),
     db: Database = Depends(get_database),
 ):
     settings = get_settings()
-    if settings.is_production:
-        raise HTTPException(status_code=503, detail="Local evidence storage is disabled in production")
     if settings.is_production and settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET:
         raise HTTPException(status_code=409, detail="Cloudinary is configured; use the signed upload flow")
     service = _service(db)
-    work = await _scoped_work_or_404(service, work_id, jurisdiction_filter)
+    work = await _scoped_work_or_404(service, work_id, jurisdiction_filter, user=user, db=db)
     content = await file.read(settings.MAX_REQUEST_SIZE_MB * 1024 * 1024 + 1)
+    parsed_captured_at = None
+    if captured_at:
+        from app.services.evidence_verification_service import _parse_datetime
+        parsed_captured_at = _parse_datetime(captured_at)
     try:
         return await service.ingest_local_upload(
             work=work,
@@ -122,6 +140,9 @@ async def upload_local_demo_evidence(
             content_type=file.content_type or "application/octet-stream",
             content=content,
             uploaded_by=user.user_id,
+            client_latitude=latitude,
+            client_longitude=longitude,
+            client_captured_at=parsed_captured_at,
             ip_address=_get_ip(request),
             user_agent=request.headers.get("user-agent", ""),
         )
@@ -146,7 +167,7 @@ async def complete_cloudinary_upload(
     if not (settings.CLOUDINARY_CLOUD_NAME and settings.CLOUDINARY_API_KEY and settings.CLOUDINARY_API_SECRET):
         raise HTTPException(status_code=409, detail="Cloudinary is not configured; use local demo upload")
     service = _service(db)
-    work = await _scoped_work_or_404(service, body.work_id, jurisdiction_filter)
+    work = await _scoped_work_or_404(service, body.work_id, jurisdiction_filter, user=user, db=db)
     try:
         return await service.complete_cloudinary_upload(
             work=work,
