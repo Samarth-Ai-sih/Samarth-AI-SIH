@@ -10,7 +10,6 @@ import { useAuth } from "@/lib/auth";
 import { CaseListResponse, FinancialDashboardResponse, RiskDistribution, WorkListResponse, formatCurrency, formatDate } from "@/lib/api";
 import { AlertTriangle, ArrowRight, ClipboardCheck, FileWarning, Landmark, MapPin, ShieldAlert, WalletCards } from "lucide-react";
 import Link from "next/link";
-import { RoleCharter } from "@/components/dashboard/role-charter";
 
 type RoleCopy = { eyebrow: string; title: string; description: string; queueLabel: string; queueHref: string; };
 const roleCopy: Record<string, RoleCopy> = {
@@ -44,7 +43,6 @@ export function RoleOverview() {
   return <>
     <PageHeader eyebrow={copy.eyebrow} title={copy.title} description={copy.description} actions={<Button asChild><Link href={copy.queueHref}>{copy.queueLabel}<ArrowRight className="h-4 w-4" /></Link></Button>} />
     {user?.must_change_password && <div role="alert" className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"><strong>Account action required.</strong> Change your temporary password in Settings before continuing with sensitive approvals.</div>}
-    <RoleCharter currentRoleId={role} />
     {(() => {
       const snoAlerts = cases.data?.cases?.filter(
         (c) =>
