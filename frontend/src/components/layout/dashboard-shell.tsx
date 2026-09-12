@@ -27,7 +27,6 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/inspections", label: "Field inspections", icon: ClipboardCheck, roles: ["inspector"] },
   { href: "/dashboard/citizen-reports", label: "Citizen moderation", icon: UsersRound, roles: ["admin", "mospi", "state_nodal_officer", "district_authority"] },
   { href: "/dashboard/analytics", label: "Analytics & reports", icon: BarChart3, roles: ["admin", "mospi", "state_nodal_officer", "mp"] },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: allInternal },
   // --- MoSPI National Command Center ---
   { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark, roles: ["admin", "mospi"] },
   { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3, roles: ["admin", "mospi"] },
@@ -139,14 +138,9 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           })}
         </nav>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
-          <p className="text-sm font-semibold text-slate-900">{user.full_name}</p>
-          <p className="mt-0.5 text-xs text-slate-500">{roleLabels[user.role] || user.role}</p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">{location}</p>
-          <Button className="mt-3 w-full" variant="outline" size="sm" onClick={() => void signOut()}>
-            <LogOut className="h-3.5 w-3.5" />
-            Sign out
-          </Button>
+        <div className="mt-auto pt-3 border-t border-slate-100 px-3 text-[11px] text-slate-400">
+          <p className="font-semibold text-slate-600">SAMARTH AI</p>
+          <p className="text-[10px] text-slate-400">MPLADS National Platform</p>
         </div>
       </aside>
 
