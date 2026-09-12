@@ -4,6 +4,7 @@ import path from "node:path";
 const nextConfig: NextConfig = {
   // Standalone output for Docker production builds
   output: "standalone",
+  skipTrailingSlashRedirect: true,
 
   // The local API is deliberately bound to loopback. Allow the loopback host
   // used by the in-app browser as well as localhost so the dev client can
