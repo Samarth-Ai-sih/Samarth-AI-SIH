@@ -27,18 +27,46 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/inspections", label: "Field inspections", icon: ClipboardCheck, roles: ["inspector"] },
   { href: "/dashboard/citizen-reports", label: "Citizen moderation", icon: UsersRound, roles: ["admin", "mospi", "state_nodal_officer", "district_authority"] },
   { href: "/dashboard/analytics", label: "Analytics & reports", icon: BarChart3, roles: ["admin", "mospi", "state_nodal_officer", "mp"] },
-  // --- MoSPI National Command Center ---
-  { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark, roles: ["admin", "mospi"] },
-  { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3, roles: ["admin", "mospi"] },
-  { href: "/dashboard/mospi/benchmarking", label: "State Benchmarking", icon: TrendingUp, roles: ["admin", "mospi"] },
-  { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert, roles: ["admin", "mospi"] },
-  { href: "/dashboard/mospi/releases", label: "Treasury Releases (₹2.5Cr)", icon: WalletCards, roles: ["admin", "mospi"] },
-  { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database, roles: ["admin", "mospi"] },
-  // --- Admin ---
-  { href: "/dashboard/admin/users", label: "User management", icon: UsersRound, roles: ["admin"] },
-  { href: "/dashboard/admin/permissions", label: "Permission matrix", icon: ShieldAlert, roles: ["admin"] },
-  { href: "/dashboard/admin/datasets", label: "Dataset imports", icon: Database, roles: ["admin"] },
+  // --- MoSPI National Command Center (direct for MoSPI role) ---
+  { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark, roles: ["mospi"] },
+  { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3, roles: ["mospi"] },
+  { href: "/dashboard/mospi/benchmarking", label: "State Benchmarking", icon: TrendingUp, roles: ["mospi"] },
+  { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert, roles: ["mospi"] },
+  { href: "/dashboard/mospi/releases", label: "Treasury Releases (₹2.5Cr)", icon: WalletCards, roles: ["mospi"] },
+  { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database, roles: ["mospi"] },
 ];
+
+const mospiSubItems: NavigationItem[] = [
+  { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark },
+  { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3 },
+  { href: "/dashboard/mospi/benchmarking", label: "State Benchmarking", icon: TrendingUp },
+  { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert },
+  { href: "/dashboard/mospi/releases", label: "Treasury Releases", icon: WalletCards },
+  { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database },
+];
+
+const ALL_PAGE_TITLES: Record<string, string> = {
+  "/dashboard": "Overview",
+  "/dashboard/works": "Work register",
+  "/dashboard/risk": "Risk alerts",
+  "/dashboard/compliance": "Compliance",
+  "/dashboard/financial": "Financial intelligence",
+  "/dashboard/duplicates": "Duplicate explorer",
+  "/dashboard/cases": "Case management",
+  "/dashboard/inspections": "Field inspections",
+  "/dashboard/citizen-reports": "Citizen moderation",
+  "/dashboard/analytics": "Analytics & reports",
+  "/dashboard/settings": "Settings",
+  "/dashboard/mospi": "National Command Center",
+  "/dashboard/mospi/telemetry": "Macro Fund Telemetry",
+  "/dashboard/mospi/benchmarking": "State Benchmarking",
+  "/dashboard/mospi/quotas": "Statutory SC/ST Quotas",
+  "/dashboard/mospi/releases": "Treasury Releases",
+  "/dashboard/mospi/ingestion": "PFMS / eSAKSHI Sync",
+  "/dashboard/admin/users": "User management",
+  "/dashboard/admin/permissions": "Permission matrix",
+  "/dashboard/admin/datasets": "Dataset imports",
+};
 
 const roleLabels: Record<string, string> = { admin: "System administration", mospi: "National programme oversight", state_nodal_officer: "State programme oversight", district_authority: "District authority", mp: "Constituency oversight", agency: "Implementing agency", inspector: "Field inspection" };
 
@@ -66,13 +94,21 @@ export function DashboardShell({ children }: { children: ReactNode }) {
     }
   }, [userMenuOpen]);
 
+  const [mospiExpanded, setMospiExpanded] = useState(pathname.startsWith("/dashboard/mospi"));
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/mospi")) {
+      setMospiExpanded(true);
+    }
+  }, [pathname]);
+
   if (isLoading) return <div className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-500">Preparing your workspace…</div>;
   if (!user) return <div className="grid min-h-screen place-items-center bg-slate-50 text-sm text-slate-500">Redirecting to sign in…</div>;
   if (user.role === "citizen") return <>{children}</>;
 
   const items = navigation.filter((item) => !item.roles || item.roles.includes(user.role));
   const currentItem = items.find((item) => pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`)));
-  const pageTitle = currentItem ? currentItem.label : "Dashboard";
+  const pageTitle = ALL_PAGE_TITLES[pathname] || currentItem?.label || "Dashboard";
   const location = [user.jurisdiction.state_code, user.jurisdiction.district_code, user.jurisdiction.constituency].filter(Boolean).join(" · ") || "All assigned jurisdictions";
 
   async function signOut() { await logout(); router.push("/login"); }
@@ -112,16 +148,13 @@ export function DashboardShell({ children }: { children: ReactNode }) {
 
         <p className="mt-2 px-3 text-xs leading-5 text-slate-500">Public works assurance and delivery workflow</p>
 
-        <nav className="mt-6 flex-1 space-y-1" aria-label="Primary navigation">
-          {items.map((item, idx) => {
+        <nav className="mt-6 flex-1 space-y-1 overflow-y-auto" aria-label="Primary navigation">
+          {items.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(`${item.href}/`));
-            const isAdminSection = item.href.startsWith("/dashboard/admin");
-            const prevIsAdmin = idx > 0 && items[idx - 1].href.startsWith("/dashboard/admin");
 
             return (
               <div key={item.href}>
-                {isAdminSection && !prevIsAdmin && <div className="my-3 h-px bg-slate-100" />}
                 <Link
                   href={item.href}
                   onClick={() => setOpen(false)}
@@ -136,6 +169,66 @@ export function DashboardShell({ children }: { children: ReactNode }) {
               </div>
             );
           })}
+
+          {/* For Admin: Collapsible MoSPI Toggle */}
+          {user.role === "admin" && (
+            <div className="pt-2">
+              <div className="my-2 h-px bg-slate-100" />
+              <button
+                type="button"
+                onClick={() => setMospiExpanded(!mospiExpanded)}
+                className={cn(
+                  "flex w-full min-h-10 items-center justify-between rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer",
+                  pathname.startsWith("/dashboard/mospi")
+                    ? "bg-indigo-50 text-indigo-950 font-semibold border-l-2 border-indigo-600"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                )}
+                aria-expanded={mospiExpanded}
+                aria-label="Toggle MoSPI oversight features"
+              >
+                <div className="flex items-center gap-3">
+                  <Landmark className="h-4 w-4 text-indigo-600 shrink-0" aria-hidden="true" />
+                  <span className="font-semibold">MoSPI Oversight</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-indigo-100/70 px-1.5 py-0.5 text-[10px] font-bold text-indigo-700">
+                    6
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 text-slate-400 transition-transform duration-200",
+                      mospiExpanded && "rotate-180"
+                    )}
+                  />
+                </div>
+              </button>
+
+              {mospiExpanded && (
+                <div className="mt-1 ml-3.5 pl-3 border-l-2 border-indigo-100 space-y-0.5">
+                  {mospiSubItems.map((subItem) => {
+                    const SubIcon = subItem.icon;
+                    const isSubActive = pathname === subItem.href || (subItem.href !== "/dashboard/mospi" && pathname.startsWith(`${subItem.href}/`));
+                    return (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex min-h-8 items-center gap-2.5 rounded-lg px-2 text-xs font-medium transition-colors",
+                          isSubActive
+                            ? "bg-indigo-100/80 text-indigo-950 font-bold"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                        )}
+                      >
+                        <SubIcon className={cn("h-3.5 w-3.5 shrink-0", isSubActive ? "text-indigo-600" : "text-slate-400")} aria-hidden="true" />
+                        <span className="truncate">{subItem.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
         <div className="mt-auto pt-3 border-t border-slate-100 px-3 text-[11px] text-slate-400">
@@ -281,6 +374,56 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                           <span className="block text-[10px] text-indigo-600">Macro fund telemetry & releases</span>
                         </div>
                       </Link>
+                    )}
+
+                    {user.role === "admin" && (
+                      <>
+                        <div className="my-1.5 h-px bg-slate-100" />
+                        <p className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          System Administration
+                        </p>
+                        <Link
+                          href="/dashboard/admin/users"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-colors"
+                        >
+                          <div className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200/60">
+                            <UsersRound className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span className="block font-semibold text-slate-900">User Management</span>
+                            <span className="block text-[10px] text-slate-500">Accounts & credentials</span>
+                          </div>
+                        </Link>
+
+                        <Link
+                          href="/dashboard/admin/permissions"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-colors"
+                        >
+                          <div className="grid h-7 w-7 place-items-center rounded-lg bg-amber-50 text-amber-700 border border-amber-200/60">
+                            <ShieldAlert className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span className="block font-semibold text-slate-900">Permission Matrix</span>
+                            <span className="block text-[10px] text-slate-500">RBAC privilege rules</span>
+                          </div>
+                        </Link>
+
+                        <Link
+                          href="/dashboard/admin/datasets"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-950 transition-colors"
+                        >
+                          <div className="grid h-7 w-7 place-items-center rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                            <Database className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 text-left">
+                            <span className="block font-semibold text-slate-900">Dataset Imports</span>
+                            <span className="block text-[10px] text-slate-500">Master CSV & model datasets</span>
+                          </div>
+                        </Link>
+                      </>
                     )}
                   </div>
 
