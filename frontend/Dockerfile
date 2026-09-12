@@ -11,7 +11,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # ── Dependencies ─────────────────────────────────────────────
 FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 # ── Development (hot-reload) ─────────────────────────────────
 FROM base AS dev
