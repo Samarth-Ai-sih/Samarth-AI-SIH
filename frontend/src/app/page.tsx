@@ -19,7 +19,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SamarthLogo } from "@/components/ui/samarth-logo";
-import { ParliamentIllustration } from "@/components/ui/parliament-illustration";
 
 export default function Home() {
   return (
@@ -143,13 +142,34 @@ export default function Home() {
                   </span>
                 </div>
 
-                {/* Parliament Illustration Vector */}
-                <ParliamentIllustration
-                  variant="outline"
-                  showCaption={true}
-                  captionTitle="संसद भवन · Parliament of India"
-                  captionSubtitle="Supreme Legislative Authority for Members of Parliament Local Area Development Scheme"
-                />
+                {/* Real Parliament of India Centerpiece */}
+                <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl border border-slate-200/90 shadow-sm group bg-slate-100">
+                  <img
+                    src="/images/parliament_of_india.jpg"
+                    alt="Parliament of India - Sansad Bhavan, New Delhi"
+                    className="h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                  />
+                  {/* Subtle tricolor top accent bar */}
+                  <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-white to-emerald-600" />
+
+                  {/* Architectural caption badge */}
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/50 to-transparent p-4 text-white">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <p className="text-xs sm:text-sm font-bold tracking-wide text-white">
+                          संसद भवन · Parliament of India
+                        </p>
+                      </div>
+                      <span className="text-[10px] uppercase font-bold tracking-wider text-slate-200 bg-white/20 border border-white/25 px-2 py-0.5 rounded backdrop-blur-xs">
+                        New Delhi
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-200 mt-1 font-medium">
+                      Supreme Legislative Authority for Members of Parliament Local Area Development Scheme
+                    </p>
+                  </div>
+                </div>
 
                 {/* Statutory Governance Ribbon */}
                 <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 gap-3 text-xs text-slate-600">

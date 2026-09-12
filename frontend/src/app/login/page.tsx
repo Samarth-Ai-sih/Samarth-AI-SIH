@@ -11,7 +11,6 @@ import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { SamarthLogo } from "@/components/ui/samarth-logo";
-import { ParliamentIllustration } from "@/components/ui/parliament-illustration";
 
 const DEMO_ACCOUNTS = [
   { label: "MP (Varanasi)", email: "mp.varanasi.demo@samarth-demo.in", role: "MP (Varanasi Urban)" },
@@ -76,62 +75,93 @@ function LoginForm() {
 
   return (
     <main className="grid min-h-screen bg-slate-50/50 lg:grid-cols-2">
-      <section className="hidden bg-gradient-to-b from-slate-900 via-slate-900 to-blue-950 border-r border-slate-800 p-10 text-white lg:flex lg:flex-col lg:justify-between relative overflow-hidden">
+      <section className="hidden bg-gradient-to-br from-amber-50/40 via-slate-50 to-sky-50/50 border-r border-slate-200/90 p-8 xl:p-12 text-slate-900 lg:flex lg:flex-col lg:justify-between relative overflow-hidden">
         {/* Subtle decorative background ambient glow */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-1/2 left-1/4 -translate-y-1/2 w-72 h-72 bg-blue-500/5 rounded-full blur-3xl pointer-events-none" />
 
         {/* Brand Header */}
-        <div className="relative z-10">
+        <div className="relative z-10 flex items-center justify-between">
           <SamarthLogo
             size="lg"
-            variant="dark"
+            variant="light"
             showSubtitle={true}
             subtitle="Government of India · MPLADS Assurance"
             href="/"
           />
+          <span className="hidden xl:inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-700 bg-white/90 border border-slate-200/90 px-3 py-1 rounded-full shadow-2xs">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+            सत्यमेव जयते
+          </span>
         </div>
 
-        {/* Architectural Centerpiece: Parliament of India Outline Illustration */}
+        {/* Architectural Centerpiece: Parliament of India Image */}
         <div className="relative z-10 my-auto py-6">
-          <div className="rounded-2xl border border-slate-700/80 bg-slate-950/60 p-6 backdrop-blur-md shadow-xl">
-            <ParliamentIllustration
-              variant="blueprint"
-              showCaption={true}
-              captionTitle="संसद भवन · Parliament of India"
-              captionSubtitle="Constitutional Authority for Members of Parliament Local Area Development Scheme"
-            />
+          <div className="rounded-2xl border border-slate-200/90 bg-white/95 p-5 shadow-lg shadow-slate-200/60 backdrop-blur-xs">
+            {/* Real Parliament Image Container */}
+            <div className="relative aspect-[16/9] w-full overflow-hidden rounded-xl border border-slate-200/90 shadow-xs group bg-slate-100">
+              <img
+                src="/images/parliament_of_india.jpg"
+                alt="Parliament of India - Sansad Bhavan, New Delhi"
+                className="h-full w-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+              />
+              {/* Subtle tricolor top accent bar */}
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-white to-emerald-600" />
 
-            <div className="mt-6 pt-5 border-t border-slate-800/90 grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                <p className="text-[10px] uppercase font-bold text-blue-400">Lok Sabha</p>
-                <p className="text-xs font-extrabold text-white mt-0.5">543 Seats</p>
+              {/* Architectural caption badge */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-slate-950/85 via-slate-950/50 to-transparent p-4 text-white">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <p className="text-xs sm:text-sm font-bold tracking-wide text-white">
+                      संसद भवन · Parliament of India
+                    </p>
+                  </div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-200 bg-white/20 border border-white/25 px-2 py-0.5 rounded backdrop-blur-xs">
+                    New Delhi
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-200 mt-1 font-medium">
+                  Constitutional Authority for Members of Parliament Local Area Development Scheme
+                </p>
               </div>
-              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                <p className="text-[10px] uppercase font-bold text-emerald-400">Annual Fund</p>
-                <p className="text-xs font-extrabold text-white mt-0.5">₹5.00 Cr / MP</p>
+            </div>
+
+            {/* Core Statutory Mandates */}
+            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2.5 text-center">
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-blue-700">Lok Sabha</p>
+                <p className="text-sm font-extrabold text-slate-900 mt-0.5">543 Seats</p>
               </div>
-              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
-                <p className="text-[10px] uppercase font-bold text-amber-400">Audit Rule</p>
-                <p className="text-xs font-extrabold text-white mt-0.5">≤50m Spatial</p>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-emerald-700">Annual Fund</p>
+                <p className="text-sm font-extrabold text-slate-900 mt-0.5">₹5.00 Cr / MP</p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-amber-700">Audit Rule</p>
+                <p className="text-sm font-extrabold text-slate-900 mt-0.5">≤50m Spatial</p>
               </div>
             </div>
           </div>
 
           <div className="mt-6">
-            <h2 className="text-xl font-bold tracking-tight text-white">
+            <h2 className="text-xl font-bold tracking-tight text-slate-900">
               A calm, accountable workspace for public-works delivery.
             </h2>
-            <p className="mt-2 text-xs leading-relaxed text-slate-300 max-w-md">
+            <p className="mt-2 text-xs leading-relaxed text-slate-600 max-w-md">
               Statutory request routing connects MPs, District Magistrates, Executing Line Agencies, and Field Inspectors with complete audit transparency.
             </p>
           </div>
         </div>
 
         {/* Footer info */}
-        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400">
-          <span>Digital Sansad & MPLADS Architecture</span>
-          <span>MoSPI Guidelines Compliant</span>
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-500 pt-3 border-t border-slate-200/80">
+          <span className="flex items-center gap-1.5 font-medium text-slate-600">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            Digital Sansad &amp; MPLADS Architecture
+          </span>
+          <span className="font-semibold text-slate-600">MoSPI Guidelines Compliant</span>
         </div>
       </section>
 
