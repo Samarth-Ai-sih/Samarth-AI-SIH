@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
+import { RoleCharter } from "@/components/dashboard/role-charter";
 import {
   PublicWorkSummary,
   PublicWorkDetail,
@@ -757,6 +758,7 @@ export default function CitizenPortalPage() {
 
       {/* Main Container */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        <RoleCharter currentRoleId="citizen" />
         {/* Banner Alert for Notice or Error */}
         {notice && (
           <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs shadow-sm">
