@@ -99,20 +99,24 @@ export const ROLE_SPECIFICATIONS: Record<string, RoleSpecification> = {
       "Oversees statewide implementation, coordinates cross-district fund distribution, and resolves administrative bottlenecks before statutory escalation.",
     responsibilities: [
       {
-        title: "Statewide Risk Heatmaps",
-        desc: "Aggregates project delivery signals and anomaly indices across all districts within the state jurisdiction.",
+        title: "Statewide Risk Heatmap",
+        desc: "Tracks district-by-district performance, expenditure utilization rates, and identifies lagging districts across the state.",
+        href: "/dashboard/sno/heatmap",
       },
       {
-        title: "Administrative Escalation Notices",
-        desc: "Issues formal compliance inquiries to lagging District Authorities when projects surpass delay or dormancy thresholds.",
+        title: "Bottleneck Escalation",
+        desc: "Automatically identifies delayed projects and issues formal administrative show-cause notices to District Magistrates exceeding delay thresholds.",
+        href: "/dashboard/sno/escalations",
       },
       {
-        title: "Inter-District Coordination",
-        desc: "Resolves cross-boundary infrastructure allocations, shared constituency works, and state-level audit queries.",
+        title: "Inter-District Allocation",
+        desc: "Resolves cross-district fund transfers, reallocating unspent treasury balances to high-absorption districts to prevent fund surrender.",
+        href: "/dashboard/sno/allocations",
       },
       {
-        title: "Inspection Quota Assurance",
-        desc: "Ensures all district administrations fulfill MoSPI's statutory mandate of physically inspecting at least 10% of sanctioned works annually.",
+        title: "Compliance Auditing",
+        desc: "Ensures district authorities meet MoSPI's mandatory 10% annual physical inspection quota, issuing time-bound Special Drive Directives for deficits.",
+        href: "/dashboard/sno/inspections-audit",
       },
     ],
     authorized: [

@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth";
 import {
   BarChart3, BriefcaseBusiness, ChevronDown, ChevronLeft, ClipboardCheck, Database, FileWarning, LayoutDashboard,
   LogOut, Menu, SearchCheck, Settings, ShieldAlert, UsersRound, WalletCards, Landmark, TrendingUp,
+  Building2, Flame, AlertTriangle, ArrowLeftRight,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -34,6 +35,12 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert, roles: ["mospi"] },
   { href: "/dashboard/mospi/releases", label: "Treasury Releases (₹2.5Cr)", icon: WalletCards, roles: ["mospi"] },
   { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database, roles: ["mospi"] },
+  // --- SNO State Command Center (direct for SNO role) ---
+  { href: "/dashboard/sno", label: "State Command Center", icon: Building2, roles: ["state_nodal_officer"] },
+  { href: "/dashboard/sno/heatmap", label: "Statewide Risk Heatmap", icon: Flame, roles: ["state_nodal_officer"] },
+  { href: "/dashboard/sno/escalations", label: "Bottleneck Escalations", icon: AlertTriangle, roles: ["state_nodal_officer"] },
+  { href: "/dashboard/sno/allocations", label: "Inter-District Allocations", icon: ArrowLeftRight, roles: ["state_nodal_officer"] },
+  { href: "/dashboard/sno/inspections-audit", label: "10% Inspection Quota", icon: ClipboardCheck, roles: ["state_nodal_officer"] },
 ];
 
 const mospiSubItems: NavigationItem[] = [
@@ -43,6 +50,14 @@ const mospiSubItems: NavigationItem[] = [
   { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert },
   { href: "/dashboard/mospi/releases", label: "Treasury Releases", icon: WalletCards },
   { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database },
+];
+
+const snoSubItems: NavigationItem[] = [
+  { href: "/dashboard/sno", label: "State Command Center", icon: Building2 },
+  { href: "/dashboard/sno/heatmap", label: "Statewide Risk Heatmap", icon: Flame },
+  { href: "/dashboard/sno/escalations", label: "Bottleneck Escalations", icon: AlertTriangle },
+  { href: "/dashboard/sno/allocations", label: "Inter-District Allocations", icon: ArrowLeftRight },
+  { href: "/dashboard/sno/inspections-audit", label: "10% Inspection Quota", icon: ClipboardCheck },
 ];
 
 const ALL_PAGE_TITLES: Record<string, string> = {
@@ -63,6 +78,11 @@ const ALL_PAGE_TITLES: Record<string, string> = {
   "/dashboard/mospi/quotas": "Statutory SC/ST Quotas",
   "/dashboard/mospi/releases": "Treasury Releases",
   "/dashboard/mospi/ingestion": "PFMS / eSAKSHI Sync",
+  "/dashboard/sno": "State Command Center",
+  "/dashboard/sno/heatmap": "Statewide Risk Heatmap",
+  "/dashboard/sno/escalations": "Bottleneck Escalations",
+  "/dashboard/sno/allocations": "Inter-District Allocations",
+  "/dashboard/sno/inspections-audit": "Mandatory 10% Inspection Quota",
   "/dashboard/admin/users": "User management",
   "/dashboard/admin/permissions": "Permission matrix",
   "/dashboard/admin/datasets": "Dataset imports",
@@ -95,10 +115,17 @@ export function DashboardShell({ children }: { children: ReactNode }) {
   }, [userMenuOpen]);
 
   const [mospiExpanded, setMospiExpanded] = useState(pathname.startsWith("/dashboard/mospi"));
+  const [snoExpanded, setSnoExpanded] = useState(pathname.startsWith("/dashboard/sno"));
 
   useEffect(() => {
     if (pathname.startsWith("/dashboard/mospi")) {
       setMospiExpanded(true);
+    }
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname.startsWith("/dashboard/sno")) {
+      setSnoExpanded(true);
     }
   }, [pathname]);
 
@@ -221,6 +248,65 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                         )}
                       >
                         <SubIcon className={cn("h-3.5 w-3.5 shrink-0", isSubActive ? "text-indigo-600" : "text-slate-400")} aria-hidden="true" />
+                        <span className="truncate">{subItem.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* For Admin: Collapsible SNO State Oversight Toggle */}
+          {user.role === "admin" && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setSnoExpanded(!snoExpanded)}
+                className={cn(
+                  "flex w-full min-h-10 items-center justify-between rounded-lg px-3 text-sm font-medium transition-colors cursor-pointer",
+                  pathname.startsWith("/dashboard/sno")
+                    ? "bg-purple-50 text-purple-950 font-semibold border-l-2 border-purple-600"
+                    : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                )}
+                aria-expanded={snoExpanded}
+                aria-label="Toggle SNO State Oversight features"
+              >
+                <div className="flex items-center gap-3">
+                  <Building2 className="h-4 w-4 text-purple-600 shrink-0" aria-hidden="true" />
+                  <span className="font-semibold">SNO State Oversight</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="rounded bg-purple-100/70 px-1.5 py-0.5 text-[10px] font-bold text-purple-700">
+                    5
+                  </span>
+                  <ChevronDown
+                    className={cn(
+                      "h-3.5 w-3.5 text-slate-400 transition-transform duration-200",
+                      snoExpanded && "rotate-180"
+                    )}
+                  />
+                </div>
+              </button>
+
+              {snoExpanded && (
+                <div className="mt-1 ml-3.5 pl-3 border-l-2 border-purple-100 space-y-0.5">
+                  {snoSubItems.map((subItem) => {
+                    const SubIcon = subItem.icon;
+                    const isSubActive = pathname === subItem.href || (subItem.href !== "/dashboard/sno" && pathname.startsWith(`${subItem.href}/`));
+                    return (
+                      <Link
+                        key={subItem.href}
+                        href={subItem.href}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex min-h-8 items-center gap-2.5 rounded-lg px-2 text-xs font-medium transition-colors",
+                          isSubActive
+                            ? "bg-purple-100/80 text-purple-950 font-bold"
+                            : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+                        )}
+                      >
+                        <SubIcon className={cn("h-3.5 w-3.5 shrink-0", isSubActive ? "text-purple-600" : "text-slate-400")} aria-hidden="true" />
                         <span className="truncate">{subItem.label}</span>
                       </Link>
                     );
@@ -372,6 +458,22 @@ export function DashboardShell({ children }: { children: ReactNode }) {
                         <div className="flex-1 text-left">
                           <span className="block font-semibold text-indigo-950">MoSPI Apex Center</span>
                           <span className="block text-[10px] text-indigo-600">Macro fund telemetry & releases</span>
+                        </div>
+                      </Link>
+                    )}
+
+                    {user.role === "state_nodal_officer" && (
+                      <Link
+                        href="/dashboard/sno"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2.5 w-full rounded-lg px-2.5 py-2 text-xs font-medium text-purple-700 hover:bg-purple-50 transition-colors"
+                      >
+                        <div className="grid h-7 w-7 place-items-center rounded-lg bg-purple-100 text-purple-700 border border-purple-200/60">
+                          <Building2 className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1 text-left">
+                          <span className="block font-semibold text-purple-950">SNO Command Center</span>
+                          <span className="block text-[10px] text-purple-600">State heatmaps & escalations</span>
                         </div>
                       </Link>
                     )}
