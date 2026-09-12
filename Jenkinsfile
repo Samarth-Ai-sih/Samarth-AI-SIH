@@ -48,7 +48,14 @@ pipeline {
             steps {
                 echo '🩺 Running live health checks...'
                 sh '''
-                    sleep 8
+                    for i in $(seq 1 30); do
+                        if curl -s -f http://localhost:8000/health > /dev/null 2>&1; then
+                            echo "Backend is healthy on port 8000!"
+                            break
+                        fi
+                        echo "Waiting for backend startup ($i/30)..."
+                        sleep 2
+                    done
                     curl -f http://localhost:8000/health || exit 1
                     curl -I http://localhost:80 || exit 1
                     echo "All 5 containers are running and healthy!"
