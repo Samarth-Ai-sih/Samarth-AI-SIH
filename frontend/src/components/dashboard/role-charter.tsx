@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Link from "next/link";
 import {
   ShieldCheck,
   Building2,
@@ -21,6 +22,7 @@ import {
   X,
   ExternalLink,
   Sparkles,
+  ArrowRight,
 } from "lucide-react";
 
 export interface RoleSpecification {
@@ -31,7 +33,7 @@ export interface RoleSpecification {
   icon: React.ComponentType<{ className?: string }>;
   tone: "blue" | "emerald" | "amber" | "purple" | "indigo" | "rose" | "teal" | "slate";
   summary: string;
-  responsibilities: Array<{ title: string; desc: string }>;
+  responsibilities: Array<{ title: string; desc: string; href?: string }>;
   authorized: string[];
   restricted: string[];
   statutoryReference: string;
@@ -51,22 +53,27 @@ export const ROLE_SPECIFICATIONS: Record<string, RoleSpecification> = {
       {
         title: "Macro Fund Telemetry",
         desc: "Real-time oversight of the ₹4,000+ Cr annual national outlay, tracking expenditure velocity across all parliamentary constituencies.",
+        href: "/dashboard/mospi/telemetry",
       },
       {
         title: "Inter-State Benchmarking",
         desc: "Comparative analytics identifying leading and lagging states, unspent district treasury balances, and fund absorption bottlenecks.",
+        href: "/dashboard/mospi/benchmarking",
       },
       {
         title: "Statutory Quota Enforcement",
         desc: "Nationwide monitoring of mandatory 15% Scheduled Caste (SC) and 7.5% Scheduled Tribe (ST) capital allocation norms.",
+        href: "/dashboard/mospi/quotas",
       },
       {
         title: "Central Treasury Releases",
         desc: "Authorizes subsequent ₹2.5 Cr installment tranches based on automated validation of digital Utilization Certificates (UCs).",
+        href: "/dashboard/mospi/releases",
       },
       {
         title: "Bulk Data Ingestion & Integration",
         desc: "Manages batch CSV ingestion and secure synchronization with national financial pipelines (PFMS & eSAKSHI).",
+        href: "/dashboard/mospi/ingestion",
       },
     ],
     authorized: [
@@ -403,6 +410,14 @@ export function RoleCharter({ currentRoleId }: { currentRoleId: string }) {
             </div>
 
             <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+              {(currentRoleId === "mospi" || currentRoleId === "admin") && (
+                <Button size="sm" asChild className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 shadow-xs">
+                  <Link href="/dashboard/mospi">
+                    <Landmark className="mr-1.5 h-3.5 w-3.5" /> Command Center
+                  </Link>
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -445,10 +460,20 @@ export function RoleCharter({ currentRoleId }: { currentRoleId: string }) {
                 <div className="space-y-2.5">
                   {spec.responsibilities.map((resp, i) => (
                     <div key={i} className="rounded-lg border border-slate-100 bg-slate-50/50 p-2.5">
-                      <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                        {resp.title}
-                      </p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-900 flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                          {resp.title}
+                        </p>
+                        {resp.href && (
+                          <Link
+                            href={resp.href}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0"
+                          >
+                            Open Route <ArrowRight className="h-3 w-3" />
+                          </Link>
+                        )}
+                      </div>
                       <p className="mt-1 text-xs text-slate-600 pl-5 leading-normal">{resp.desc}</p>
                     </div>
                   ))}
@@ -586,12 +611,25 @@ export function RoleCharter({ currentRoleId }: { currentRoleId: string }) {
                       </h5>
                       <div className="grid gap-2.5 sm:grid-cols-2">
                         {active.responsibilities.map((r, i) => (
-                          <div key={i} className="rounded-lg border border-slate-200 p-3 bg-white shadow-2xs">
-                            <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
-                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                              {r.title}
-                            </p>
-                            <p className="mt-1.5 text-xs text-slate-600 leading-normal">{r.desc}</p>
+                          <div key={i} className="rounded-lg border border-slate-200 p-3 bg-white shadow-2xs flex flex-col justify-between">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                                {r.title}
+                              </p>
+                              <p className="mt-1.5 text-xs text-slate-600 leading-normal">{r.desc}</p>
+                            </div>
+                            {r.href && (
+                              <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-end">
+                                <Link
+                                  href={r.href}
+                                  onClick={() => setModalOpen(false)}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                                >
+                                  Open Route <ArrowRight className="h-3 w-3" />
+                                </Link>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

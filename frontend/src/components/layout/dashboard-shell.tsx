@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import {
   BarChart3, BriefcaseBusiness, ChevronLeft, ClipboardCheck, Database, FileWarning, LayoutDashboard,
-  LogOut, Menu, SearchCheck, Settings, ShieldAlert, UsersRound, WalletCards,
+  LogOut, Menu, SearchCheck, Settings, ShieldAlert, UsersRound, WalletCards, Landmark, TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -28,6 +28,13 @@ const navigation: NavigationItem[] = [
   { href: "/dashboard/citizen-reports", label: "Citizen moderation", icon: UsersRound, roles: ["admin", "mospi", "state_nodal_officer", "district_authority"] },
   { href: "/dashboard/analytics", label: "Analytics & reports", icon: BarChart3, roles: ["admin", "mospi", "state_nodal_officer", "mp"] },
   { href: "/dashboard/settings", label: "Settings", icon: Settings, roles: allInternal },
+  // --- MoSPI National Command Center ---
+  { href: "/dashboard/mospi", label: "National Command Center", icon: Landmark, roles: ["admin", "mospi"] },
+  { href: "/dashboard/mospi/telemetry", label: "Macro Fund Telemetry", icon: BarChart3, roles: ["admin", "mospi"] },
+  { href: "/dashboard/mospi/benchmarking", label: "State Benchmarking", icon: TrendingUp, roles: ["admin", "mospi"] },
+  { href: "/dashboard/mospi/quotas", label: "Statutory SC/ST Quotas", icon: ShieldAlert, roles: ["admin", "mospi"] },
+  { href: "/dashboard/mospi/releases", label: "Treasury Releases (₹2.5Cr)", icon: WalletCards, roles: ["admin", "mospi"] },
+  { href: "/dashboard/mospi/ingestion", label: "PFMS / eSAKSHI Sync", icon: Database, roles: ["admin", "mospi"] },
   // --- Admin ---
   { href: "/dashboard/admin/users", label: "User management", icon: UsersRound, roles: ["admin"] },
   { href: "/dashboard/admin/permissions", label: "Permission matrix", icon: ShieldAlert, roles: ["admin"] },

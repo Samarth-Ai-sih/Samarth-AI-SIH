@@ -43,6 +43,7 @@ from app.api.v1.public import router as public_router
 from app.api.v1.citizen_reports import router as citizen_reports_router
 from app.api.v1.background import router as background_router
 from app.api.v1.anomalies import router as anomalies_router
+from app.api.v1.mospi import router as mospi_router
 
 logger = logging.getLogger("samarth.app")
 
@@ -62,6 +63,7 @@ async def _ensure_indexes(db: Database) -> None:
     from app.services.citizen_portal_service import CitizenPortalService
     from app.services.background_job_service import BackgroundJobService
     from app.services.notification_service import NotificationService
+    from app.services.mospi_service import MoSPIService
 
     auth_svc = AuthService(db)
     audit_svc = AuditService(db)
@@ -95,7 +97,8 @@ async def _ensure_indexes(db: Database) -> None:
     await citizen_portal_svc.ensure_indexes()
     await background_job_svc.ensure_indexes()
     await notification_svc.ensure_indexes()
-    logger.info("MongoDB indexes ensured")
+    await MoSPIService(db).ensure_defaults()
+    logger.info("MongoDB indexes and MoSPI defaults ensured")
 
 
 @asynccontextmanager
@@ -257,6 +260,9 @@ def create_app() -> FastAPI:
 
     # Anomaly & Fraud Detection, Verification Routing, and 'What Happened in This Project' Story Dossier
     app.include_router(anomalies_router)
+
+    # MoSPI Executive Command Center (Macro Telemetry, Benchmarking, Quotas, Releases, Portal Sync)
+    app.include_router(mospi_router)
 
     return app
 
