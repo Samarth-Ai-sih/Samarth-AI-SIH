@@ -119,6 +119,8 @@ export default function CitizenPortalPage() {
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Captcha challenge
@@ -344,11 +346,36 @@ export default function CitizenPortalPage() {
     setLocationConsent(false);
     setCapturedLocation(null);
     setCameraActive(false);
+    setCameraError(null);
     stopCameraStream();
     setReportModalOpen(true);
     void fetchChallenge();
-    // Automatically launch live camera for ground verification
-    void startLiveCamera();
+    // Only attempt live camera if mediaDevices is supported (e.g. secure HTTPS or localhost)
+    if (typeof window !== "undefined" && window.isSecureContext && typeof navigator?.mediaDevices?.getUserMedia === "function") {
+      void startLiveCamera();
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files || e.target.files.length === 0) return;
+    const newFiles = Array.from(e.target.files);
+    const validFiles = newFiles.filter((f) => {
+      if (!f.type.startsWith("image/")) {
+        setError("Only image files (JPEG, PNG, WebP) are accepted.");
+        return false;
+      }
+      if (f.size > 8 * 1024 * 1024) {
+        setError(`File "${f.name}" exceeds 8MB limit.`);
+        return false;
+      }
+      return true;
+    });
+
+    const combined = [...selectedFiles, ...validFiles].slice(0, 3);
+    setSelectedFiles(combined);
+    setImagePreviews(combined.map((f) => URL.createObjectURL(f)));
+    e.target.value = "";
+    setCameraError(null);
   }
 
   function removePhoto(index: number) {
@@ -383,8 +410,8 @@ export default function CitizenPortalPage() {
   // Live Camera handling with fallback
   async function startLiveCamera(desiredMode?: "environment" | "user") {
     setCameraError(null);
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-      setCameraError("Camera stream not supported by this browser. Please use 'Select Image Files'.");
+    if (typeof window === "undefined" || !window.isSecureContext || typeof navigator?.mediaDevices?.getUserMedia !== "function") {
+      setCameraError("Live browser viewfinder requires a secure HTTPS connection. Please use 'Take Photo with Camera' or 'Select Image Files' below.");
       return;
     }
     const mode = desiredMode || facingMode;
@@ -1720,30 +1747,68 @@ export default function CitizenPortalPage() {
                 </div>
               </div>
 
-              {/* REAL-TIME CAMERA ONLY (ANTI-AI TAMPER VERIFICATION) */}
+              {/* REAL-TIME CAMERA & EVIDENCE UPLOAD */}
               <div className="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Camera className="h-4 w-4 text-slate-800" />
                     <span className="text-xs font-bold text-slate-900">
-                      Real-Time Camera Evidence (Max 3 Photos)
+                      Ground Photo Evidence (Max 3 Photos)
                     </span>
                   </div>
                   <span className="text-[11px] font-semibold text-slate-500">
-                    {selectedFiles.length} of 3 photos captured
+                    {selectedFiles.length} of 3 photos attached
                   </span>
                 </div>
 
-                {/* Anti-AI Security Integrity Notice */}
-                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
-                  <ShieldCheck className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                {/* Ground Verification Notice */}
+                <div className="flex items-start gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-200 text-blue-900 text-[11px] leading-relaxed">
+                  <ShieldCheck className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                   <span>
-                    <strong>Anti-Tamper Live Capture:</strong> Device file uploads are strictly disabled to prevent AI-generated, morphed, or recycled images. Only real-time photos taken directly on site are verified.
+                    <strong>Ground Evidence Verification:</strong> Attach up to 3 factual site photos (work progress, signage, or quality concerns). You can take a live photo using your device camera or upload from your gallery/files.
                   </span>
                 </div>
 
-                {/* Camera Action Button */}
+                {/* Hidden File Inputs */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {/* Photo Action Buttons */}
                 <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={selectedFiles.length >= 3}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <Camera className="h-3.5 w-3.5" />
+                    Take Photo with Camera
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={selectedFiles.length >= 3}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    Select Image Files
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -1757,11 +1822,11 @@ export default function CitizenPortalPage() {
                     className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer ${
                       cameraActive
                         ? "bg-rose-600 hover:bg-rose-700 text-white"
-                        : "bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                        : "bg-slate-700 hover:bg-slate-800 text-white disabled:opacity-50"
                     }`}
                   >
                     <Camera className="h-3.5 w-3.5" />
-                    {cameraActive ? "Hide Camera Viewfinder" : "Open Live Camera"}
+                    {cameraActive ? "Hide Viewfinder" : "Live Viewfinder"}
                   </button>
                 </div>
 
@@ -1799,7 +1864,10 @@ export default function CitizenPortalPage() {
                 )}
 
                 {cameraError && (
-                  <p className="text-[11px] text-rose-600 font-medium">{cameraError}</p>
+                  <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
+                    <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <span>{cameraError}</span>
+                  </div>
                 )}
 
                 {/* Previews of attached images */}
