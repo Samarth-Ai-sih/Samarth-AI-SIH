@@ -36,9 +36,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    volumes:
-      - ./backend:/app
-      - ./data:/data:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -61,8 +58,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    volumes:
-      - ./backend:/app
     depends_on:
       redis:
         condition: service_healthy
@@ -84,8 +79,6 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-    volumes:
-      - ./backend:/app
     depends_on:
       redis:
         condition: service_healthy
@@ -107,10 +100,6 @@ services:
       # Browser calls stay same-origin (/api/*); Next.js proxies them to this
       # Docker-network hostname rather than to its own localhost.
       - NEXT_PUBLIC_API_URL=http://backend:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
     depends_on:
       - backend
     restart: unless-stopped

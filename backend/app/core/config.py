@@ -225,8 +225,8 @@ class Settings(BaseSettings):
 
     @property
     def cookie_secure(self) -> bool:
-        """Only set Secure flag on cookies in production."""
-        return self.is_production
+        """Only set Secure flag on cookies when HTTPS is used."""
+        return self.is_production and any(origin.startswith("https://") for origin in self.cors_origins_list)
 
     @property
     def cookie_domain_value(self) -> str | None:
@@ -241,8 +241,19 @@ class Settings(BaseSettings):
             raise ValueError("DEBUG must be disabled in production")
         if self.is_production and not origins:
             raise ValueError("CORS_ORIGINS must contain at least one explicit origin in production")
-        if self.is_production and any(not origin.startswith("https://") for origin in origins):
-            raise ValueError("CORS_ORIGINS must use HTTPS origins in production")
+        if self.is_production and any(
+            not (
+                origin.startswith("https://")
+                or origin.startswith("http://localhost")
+                or origin.startswith("http://127.0.0.1")
+                or (
+                    urlparse(origin).hostname
+                    and all(part.isdigit() for part in urlparse(origin).hostname.split("."))
+                )
+            )
+            for origin in origins
+        ):
+            raise ValueError("CORS_ORIGINS must use HTTPS origins or IP addresses in production")
         if self.is_production and not self.MONGODB_URI.startswith("mongodb+srv://"):
             raise ValueError("MONGODB_URI must use a MongoDB Atlas SRV URI in production")
         if not self.is_development and (

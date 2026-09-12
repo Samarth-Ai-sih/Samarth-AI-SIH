@@ -17,7 +17,6 @@ services:
       - DEBUG=false
       - LOG_LEVEL=WARNING
       - LOG_FORMAT=json
-    volumes: []
     deploy:
       resources:
         limits:
@@ -30,7 +29,6 @@ services:
       --loglevel=warning
       --concurrency=4
       -Q default,scoring,notifications,escalation,evidence
-    volumes: []
     deploy:
       resources:
         limits:
@@ -41,7 +39,6 @@ services:
     command: >
       celery -A app.celery_app:celery_app beat
       --loglevel=warning
-    volumes: []
     deploy:
       resources:
         limits:
@@ -58,7 +55,6 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-    volumes: []
     deploy:
       resources:
         limits:
