@@ -10,6 +10,8 @@ import { Input } from "@/components/ui/input";
 import { LoadingState } from "@/components/ui/states";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { SamarthLogo } from "@/components/ui/samarth-logo";
+import { ParliamentIllustration } from "@/components/ui/parliament-illustration";
 
 const DEMO_ACCOUNTS = [
   { label: "MP (Varanasi)", email: "mp.varanasi.demo@samarth-demo.in", role: "MP (Varanasi Urban)" },
@@ -74,29 +76,76 @@ function LoginForm() {
 
   return (
     <main className="grid min-h-screen bg-slate-50/50 lg:grid-cols-2">
-      <section className="hidden bg-white border-r border-slate-200 p-12 text-slate-900 lg:flex lg:flex-col lg:justify-between">
-        <Link href="/" className="flex items-center gap-2 font-bold text-slate-950">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 text-white font-black">S</span>
-          SAMARTH AI
-        </Link>
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[.16em] text-blue-600">Role-based operations</p>
-          <h1 className="mt-4 max-w-md text-4xl font-bold leading-tight text-slate-900">
-            A calm, accountable workspace for public-works delivery.
-          </h1>
-          <p className="mt-5 max-w-md text-slate-600">
-            Use scoped queues to record progress, inspect evidence, manage case decisions, and preserve an audit trail.
-          </p>
+      <section className="hidden bg-gradient-to-b from-slate-900 via-slate-900 to-blue-950 border-r border-slate-800 p-10 text-white lg:flex lg:flex-col lg:justify-between relative overflow-hidden">
+        {/* Subtle decorative background ambient glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-80 h-80 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        {/* Brand Header */}
+        <div className="relative z-10">
+          <SamarthLogo
+            size="lg"
+            variant="dark"
+            showSubtitle={true}
+            subtitle="Government of India · MPLADS Assurance"
+            href="/"
+          />
         </div>
-        <p className="text-xs text-slate-400">Independent demonstration interface · no official branding represented</p>
+
+        {/* Architectural Centerpiece: Parliament of India Outline Illustration */}
+        <div className="relative z-10 my-auto py-6">
+          <div className="rounded-2xl border border-slate-700/80 bg-slate-950/60 p-6 backdrop-blur-md shadow-xl">
+            <ParliamentIllustration
+              variant="blueprint"
+              showCaption={true}
+              captionTitle="संसद भवन · Parliament of India"
+              captionSubtitle="Constitutional Authority for Members of Parliament Local Area Development Scheme"
+            />
+
+            <div className="mt-6 pt-5 border-t border-slate-800/90 grid grid-cols-3 gap-2 text-center">
+              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                <p className="text-[10px] uppercase font-bold text-blue-400">Lok Sabha</p>
+                <p className="text-xs font-extrabold text-white mt-0.5">543 Seats</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                <p className="text-[10px] uppercase font-bold text-emerald-400">Annual Fund</p>
+                <p className="text-xs font-extrabold text-white mt-0.5">₹5.00 Cr / MP</p>
+              </div>
+              <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                <p className="text-[10px] uppercase font-bold text-amber-400">Audit Rule</p>
+                <p className="text-xs font-extrabold text-white mt-0.5">≤50m Spatial</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <h2 className="text-xl font-bold tracking-tight text-white">
+              A calm, accountable workspace for public-works delivery.
+            </h2>
+            <p className="mt-2 text-xs leading-relaxed text-slate-300 max-w-md">
+              Statutory request routing connects MPs, District Magistrates, Executing Line Agencies, and Field Inspectors with complete audit transparency.
+            </p>
+          </div>
+        </div>
+
+        {/* Footer info */}
+        <div className="relative z-10 flex items-center justify-between text-[11px] text-slate-400">
+          <span>Digital Sansad & MPLADS Architecture</span>
+          <span>MoSPI Guidelines Compliant</span>
+        </div>
       </section>
 
-      <section className="flex items-center justify-center p-5 sm:p-10">
+      <section className="flex flex-col items-center justify-center p-5 sm:p-10">
+        {/* Mobile-only Top Brand Header */}
+        <div className="mb-6 lg:hidden">
+          <SamarthLogo size="md" showSubtitle={true} subtitle="MPLADS Governance Portal" href="/" />
+        </div>
+
         <Card className="w-full max-w-md shadow-xs border-slate-200">
           <CardHeader>
-            <Link href="/" className="mb-6 inline-flex w-fit items-center gap-1 text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline">
-              <ArrowLeft className="h-4 w-4" />
-              Back to public portal
+            <Link href="/" className="mb-4 inline-flex w-fit items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 hover:underline">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to Home / Public Portal
             </Link>
             <div className="flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-slate-800">

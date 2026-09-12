@@ -13,6 +13,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
+import { SamarthLogo } from "@/components/ui/samarth-logo";
 
 type NavigationItem = { href: string; label: string; icon: ComponentType<{ className?: string }>; roles?: string[] };
 
@@ -187,10 +188,8 @@ export function DashboardShell({ children }: { children: ReactNode }) {
           open ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex items-center justify-between px-3">
-          <Link href="/dashboard" className="text-lg font-bold tracking-tight text-slate-950">
-            SAMARTH <span className="text-blue-600">AI</span>
-          </Link>
+        <div className="flex items-center justify-between px-2">
+          <SamarthLogo size="md" href="/dashboard" />
           <Button
             variant="ghost"
             size="icon"
@@ -426,6 +425,10 @@ export function DashboardShell({ children }: { children: ReactNode }) {
             >
               <Menu className="h-5 w-5" />
             </Button>
+
+            <div className="lg:hidden shrink-0 mr-1">
+              <SamarthLogo size="sm" href="/dashboard" />
+            </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
               <span className="text-base font-semibold tracking-tight text-slate-950 sm:text-lg">
