@@ -23,6 +23,14 @@ const nextConfig: NextConfig = {
         source: "/api/:path*",
         destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/:path*`,
       },
+      {
+        source: "/github-webhook",
+        destination: "http://172.17.0.1:8080/github-webhook/",
+      },
+      {
+        source: "/github-webhook/:path*",
+        destination: "http://172.17.0.1:8080/github-webhook/:path*",
+      },
     ];
   },
 };
