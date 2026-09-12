@@ -14,20 +14,31 @@ SAMARTH AI is an explainable intelligence and assurance layer for MPLADS-style p
 
 > **Disclaimer:** SAMARTH AI is a Smart India Hackathon prototype developed by Team Parallaxes. It provides data-driven decision-support signals to assist human review. Alerts do not constitute a final determination of misconduct or non-compliance.
 
+The platform provides 8 role-scoped command centers: Member of Parliament, District Authority/Magistrate, Implementing Line Agency, Field Inspector, State Nodal Officer, MoSPI National Center, Citizen Public Portal, and System Administration.
+
+---
+## Key features
+- Explainable risk scoring (XGBoost + Isolation Forest + SHAP) with local, plain-language reasoning for every flag
+- Spatial + text-similarity duplicate-work detection (≤50m + TF-IDF/cosine ≥0.82)
+- Tamper-aware evidence verification via perceptual hashing and EXIF/GPS cross-checks
+- Full audit trail — every state transition, payment, and inspection is immutably logged
+- Human-in-the-loop by design: every AI signal requires manual verification, never an automated verdict
+
 ---
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js (App Router), TypeScript, Tailwind CSS |
+| Frontend | Next.js 16.3 (App Router), TypeScript, Tailwind CSS |
 | Backend | FastAPI, Python, Pydantic v2 |
 | Database | MongoDB Atlas (Motor async driver) |
 | Cache | Redis |
 | Task Queue | Celery |
 | ML | XGBoost, Isolation Forest, SHAP, TF-IDF |
 | Storage | Cloudinary (signed uploads) |
-| Deployment | Docker, Docker Compose, Vercel, Render |
+| Deployment | Docker, Docker Compose, AWS EC2 |
+| Dev & Tools | Jenkins, Github |
 
 ---
 
@@ -36,7 +47,7 @@ SAMARTH AI is an explainable intelligence and assurance layer for MPLADS-style p
 ### Prerequisites
 
 - Node.js ≥ 20
-- Python 3.11–3.12 (the pinned backend stack and Docker image are validated on these versions)
+- Python 3.12 or 3.14 (the pinned backend stack and Docker image are validated on these versions)
 - Docker & Docker Compose
 - MongoDB Atlas account
 - Cloudinary account
@@ -179,10 +190,9 @@ record review and a coordinate-only map sourced from stored locations.
 | `POST /api/v1/duplicates/{match_id}/mark-not-duplicate` | Record that review found distinct works. |
 | `POST /api/v1/duplicates/{match_id}/request-field-verification` | Request on-site verification. |
 
-The configurable default rule requires TF-IDF/cosine text similarity of at
-least 0.82, a Haversine distance of at most 300m when GeoJSON distance is not
-available, same or similar category, a comparable sanctioned-cost range (30%
-by default), and timeline overlap or the same financial year. Same
+The configurable default rule requires TF-IDF/cosine text similarity of at least 0.82, 
+a Haversine distance of at most 50m, same or similar category, a comparable sanctioned-cost 
+range (30% by default), and timeline overlap or the same financial year. Same
 agency/vendor and shared evidence-photo hash signals are recorded as additional
 context. Every alert says **Possible Duplicate Work — Manual Verification
 Required.**
