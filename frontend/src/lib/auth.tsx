@@ -79,9 +79,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         csrfToken: null,
       });
     };
+    // Safety timeout: Never leave the user stuck on "Checking your session..."
+    const safetyTimer = window.setTimeout(() => {
+      setState((prev) => (prev.isLoading ? { ...prev, isLoading: false } : prev));
+    }, 2000);
+
     const tryRestore = async () => {
       const csrfToken = Cookies.get("csrf_token");
       if (!csrfToken) {
+        window.clearTimeout(safetyTimer);
         finishUnauthenticated();
         return;
       }
@@ -97,6 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (!res.ok) {
+          window.clearTimeout(safetyTimer);
           finishUnauthenticated();
           return;
         }
@@ -107,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           headers: { Authorization: `Bearer ${data.access_token}` },
         });
 
+        window.clearTimeout(safetyTimer);
         if (meRes.ok) {
           const user = await meRes.json();
           setState({
@@ -120,11 +128,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           finishUnauthenticated();
         }
       } catch {
+        window.clearTimeout(safetyTimer);
         finishUnauthenticated();
       }
     };
 
-    tryRestore();
+    void tryRestore();
+    return () => window.clearTimeout(safetyTimer);
   }, []);
 
   // Login

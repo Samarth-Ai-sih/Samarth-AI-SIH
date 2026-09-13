@@ -9,7 +9,15 @@ const nextConfig: NextConfig = {
   // The local API is deliberately bound to loopback. Allow the loopback host
   // used by the in-app browser as well as localhost so the dev client can
   // hydrate instead of leaving auth screens in their server-rendered state.
-  allowedDevOrigins: ["127.0.0.1", "localhost"],
+  allowedDevOrigins: [
+    "127.0.0.1",
+    "localhost",
+    "13.203.65.170",
+    "13-203-65-170.sslip.io",
+    "*.sslip.io",
+    "samarth-ai.in",
+    "*.samarth-ai.in",
+  ],
 
   // Keep Turbopack's filesystem boundary at this app rather than inheriting
   // an unrelated lockfile from a parent directory.
