@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import React, { useCallback, useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { WorkLocationMap } from "@/components/maps/work-location-map";
 import { ProjectStoryDossier } from "@/components/works/project-story-dossier";
 import { WorkRoutingTracker } from "@/components/works/work-routing-tracker";
@@ -21,6 +22,7 @@ import { WorkRoutingTracker } from "@/components/works/work-routing-tracker";
 
 export default function Work360Page() {
   const { user, fetchWithAuth, isLoading: authLoading } = useAuth();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -102,12 +104,18 @@ export default function Work360Page() {
       } catch {
         // Non-critical
       }
+
+      try {
+        void queryClient.invalidateQueries({ queryKey: ["work-routing", workId] });
+      } catch {
+        // Non-critical
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load work");
     } finally {
       setIsLoading(false);
     }
-  }, [workId, fetchWithAuth]);
+  }, [workId, fetchWithAuth, queryClient]);
 
   const handleOpenSanctionModal = () => {
     if (!work) return;

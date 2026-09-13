@@ -99,6 +99,11 @@ export function WorkRoutingTracker({
     }
   };
 
+  const inspectionStage = routing.stages.find((s) => s.stage_id === "field_inspection");
+  const isInspectionDispatched = Boolean(
+    inspectionStage && (inspectionStage.status !== "pending" || inspectionStage.action_ref)
+  );
+
   return (
     <div className="rounded-2xl border-2 border-slate-200 bg-white shadow-sm overflow-hidden my-4">
       {/* ── Active Custodian Live Beacon Banner ── */}
@@ -108,6 +113,8 @@ export function WorkRoutingTracker({
             ? "bg-gradient-to-r from-amber-500/10 via-amber-50 to-orange-50/40 border-amber-200"
             : routing.current_status === "sanctioned" || routing.current_status === "in_progress"
             ? "bg-gradient-to-r from-blue-500/10 via-sky-50 to-indigo-50/40 border-blue-200"
+            : routing.current_status === "under_verification"
+            ? "bg-gradient-to-r from-purple-500/10 via-indigo-50 to-purple-50/40 border-purple-200"
             : routing.current_status === "completed"
             ? "bg-gradient-to-r from-emerald-500/10 via-teal-50 to-emerald-50/40 border-emerald-200"
             : "bg-slate-50 border-slate-200"
@@ -159,7 +166,8 @@ export function WorkRoutingTracker({
               </Button>
             )}
 
-            {(routing.current_status === "sanctioned" || routing.current_status === "in_progress") &&
+            {!isInspectionDispatched &&
+              (routing.current_status === "sanctioned" || routing.current_status === "in_progress" || routing.current_stage_id === "agency_execution") &&
               (user?.role === "district_authority" || user?.role === "agency" || user?.role === "admin") &&
               onOpenInspectionModal && (
                 <Button
@@ -171,6 +179,12 @@ export function WorkRoutingTracker({
                   <Camera className="mr-1 h-3.5 w-3.5" /> Dispatch Field Inspection
                 </Button>
               )}
+
+            {isInspectionDispatched && inspectionStage?.action_ref && (
+              <span className="text-[11px] font-mono text-purple-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-lg">
+                Inspection Ref: {inspectionStage.action_ref}
+              </span>
+            )}
 
             {routing.current_stage_id === "agency_execution" && (user?.role === "agency" || user?.role === "admin") && onOpenProgressModal && (
               <Button

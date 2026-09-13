@@ -59,7 +59,7 @@ COLLECTION = "works"
 ALLOWED_STATUS_TRANSITIONS: dict[WorkStatus, set[WorkStatus]] = {
     WorkStatus.RECOMMENDED: {WorkStatus.UNDER_REVIEW, WorkStatus.SANCTIONED, WorkStatus.CANCELLED},
     WorkStatus.UNDER_REVIEW: {WorkStatus.RECOMMENDED, WorkStatus.SANCTIONED, WorkStatus.CANCELLED},
-    WorkStatus.SANCTIONED: {WorkStatus.IN_PROGRESS, WorkStatus.ON_HOLD, WorkStatus.CANCELLED},
+    WorkStatus.SANCTIONED: {WorkStatus.IN_PROGRESS, WorkStatus.ON_HOLD, WorkStatus.CANCELLED, WorkStatus.UNDER_VERIFICATION},
     WorkStatus.IN_PROGRESS: {WorkStatus.ON_HOLD, WorkStatus.COMPLETED, WorkStatus.UNDER_VERIFICATION, WorkStatus.CANCELLED},
     WorkStatus.ON_HOLD: {WorkStatus.IN_PROGRESS, WorkStatus.CANCELLED},
     WorkStatus.COMPLETED: {WorkStatus.UNDER_VERIFICATION},
@@ -812,6 +812,16 @@ class WorkService:
             actor=added_by_user_id,
         )
 
+        set_fields: dict[str, Any] = {
+            "physical_progress_pct": data.physical_progress_pct,
+            "updated_at": now,
+        }
+        if data.physical_progress_pct >= 100:
+            if not work.actual_completion_date:
+                set_fields["actual_completion_date"] = now
+            if getattr(work, "active_case_id", None) and work.status not in (WorkStatus.COMPLETED, WorkStatus.CANCELLED):
+                set_fields["status"] = WorkStatus.UNDER_VERIFICATION.value
+
         result = await self._collection.update_one(
             self._work_query(work_id, jurisdiction_filter),
             {
@@ -819,10 +829,7 @@ class WorkService:
                     "progress_updates": update.model_dump(),
                     "timeline": timeline_event.model_dump(),
                 },
-                "$set": {
-                    "physical_progress_pct": data.physical_progress_pct,
-                    "updated_at": now,
-                },
+                "$set": set_fields,
             },
         )
 
@@ -1519,17 +1526,32 @@ class WorkService:
             is_current_stage=s2_is_curr,
         )
 
+        # Inspection & progress conditions
+        has_insp_report = bool(insp_case and (insp_case.get("inspection_reports") or insp_case.get("status") in ("evidence_submitted", "resolved")))
+        insp_dispatched = bool(insp_case and (insp_case.get("status") in ("inspection_assigned", "evidence_submitted", "resolved") or work.active_case_id))
+        is_100_pct = bool(work.physical_progress_pct is not None and work.physical_progress_pct >= 100)
+
+        # Stage 3: Implementing Agency Civil Execution
         s3_status = "pending"
         s3_is_curr = False
         s3_action = "Awaiting Administrative Sanction before work order issuance."
+        s3_completed_at = None
+
         if s2_status == "completed":
-            if status_val in ("sanctioned", "in_progress", "on_hold"):
+            if (is_100_pct and insp_dispatched) or status_val in ("completed", "under_verification"):
+                # Agency recorded 100% and field inspection request dispatched -> Step 3 is completed!
+                s3_status = "completed"
+                s3_is_curr = False
+                s3_action = "Civil construction 100% completed and measurement books finalized. Dispatched for field quality inspection."
+                s3_completed_at = work.actual_completion_date or (insp_case.get("created_at") if insp_case else None) or work.updated_at
+            elif is_100_pct and not insp_dispatched:
                 s3_status = "in_progress"
                 s3_is_curr = True
-                s3_action = f"Physical progress at {work.physical_progress_pct}%. Executing line agency recording milestones."
-            elif status_val in ("completed", "under_verification"):
-                s3_status = "completed"
-                s3_action = "Civil construction 100% completed and measurement books finalized."
+                s3_action = "Civil progress recorded at 100%. Implementing Agency must dispatch field inspection request for geotagged verification."
+            elif status_val in ("sanctioned", "in_progress", "on_hold"):
+                s3_status = "in_progress"
+                s3_is_curr = True
+                s3_action = f"Physical progress at {work.physical_progress_pct or 0:.0f}%. Executing line agency recording milestones."
 
         s3 = StageRoutingInfo(
             stage_id="agency_execution",
@@ -1538,25 +1560,35 @@ class WorkService:
             active_custodian=agency_info,
             action_required=s3_action,
             action_ref=work.implementing_agency,
-            completed_at=work.actual_completion_date if s3_status == "completed" else None,
+            completed_at=s3_completed_at,
             is_current_stage=s3_is_curr,
         )
 
-        has_insp_report = bool(insp_case and (insp_case.get("inspection_reports") or insp_case.get("status") in ("evidence_submitted", "resolved")))
+        # Stage 4: Field Inspection & Geotagged Verification
         s4_status = "pending"
         s4_is_curr = False
         s4_action = "On-site GPS geotagged photo inspection pending scheduling."
-        if has_insp_report:
-            s4_status = "completed"
-            s4_action = "Geotagged physical evidence captured, verified, and reconciled."
-        elif insp_case and insp_case.get("status") == "inspection_assigned":
-            s4_status = "in_progress"
-            s4_is_curr = True
-            s4_action = "Field inspector dispatched to site for physical geotagged verification."
-        elif status_val in ("under_verification", "completed"):
-            s4_status = "in_progress"
-            s4_is_curr = True
-            s4_action = "Independent physical audit underway."
+        s4_completed_at = None
+
+        if s3_status == "completed" or (s2_status == "completed" and insp_dispatched):
+            if has_insp_report:
+                s4_status = "completed"
+                s4_is_curr = False
+                s4_action = "Geotagged physical evidence captured, verified, and reconciled."
+                s4_completed_at = (insp_case.get("updated_at") if insp_case else None) or work.updated_at
+            elif insp_dispatched:
+                s4_status = "in_progress"
+                s4_is_curr = True
+                insp_ref = (insp_case.get("case_id") if insp_case else None) or work.active_case_id or "CASE-INSP"
+                s4_action = f"Field inspection ({insp_ref}) assigned to {inspector_info.name}. On-site physical verification required."
+            elif status_val in ("under_verification", "completed") or is_100_pct:
+                s4_status = "in_progress"
+                s4_is_curr = True
+                s4_action = "Independent physical audit underway."
+
+        # Mutually exclusive current stage: if s4 is active, s3 cannot be current
+        if s4_is_curr:
+            s3.is_current_stage = False
 
         s4 = StageRoutingInfo(
             stage_id="field_inspection",
@@ -1564,19 +1596,21 @@ class WorkService:
             status=s4_status,
             active_custodian=inspector_info,
             action_required=s4_action,
-            action_ref=insp_case.get("case_id") if insp_case else None,
+            action_ref=insp_case.get("case_id") if insp_case else work.active_case_id,
+            completed_at=s4_completed_at,
             is_current_stage=s4_is_curr,
         )
 
+        # Stage 5: SNO / MoSPI Audit & Closeout
         s5_status = "pending"
         s5_is_curr = False
         s5_action = "Final Utilization Certificate (UC) and audit reconciliation pending completion."
         if status_val == "completed" and s4_status == "completed":
             s5_status = "completed"
             s5_action = "Full statutory compliance verified. Project reconciled in eSAKSHI portal."
-        elif status_val in ("completed", "under_verification"):
+        elif s4_status == "completed":
             s5_status = "in_progress"
-            s5_is_curr = not (s3_is_curr or s4_is_curr)
+            s5_is_curr = True
             s5_action = "Reviewing expenditure vouchers and final UC submission."
 
         s5 = StageRoutingInfo(
@@ -1591,7 +1625,7 @@ class WorkService:
         stages = [s1, s2, s3, s4, s5]
         current_stage = next((s for s in stages if s.is_current_stage), None)
         if not current_stage:
-            current_stage = s2 if s2.status != "completed" else (s3 if s3.status != "completed" else s4)
+            current_stage = s2 if s2.status != "completed" else (s3 if s3.status != "completed" else (s4 if s4.status != "completed" else s5))
 
         return WorkRoutingResponse(
             work_id=work.work_id,
@@ -1694,6 +1728,10 @@ class WorkService:
         )
 
         update_dict: dict[str, Any] = {"active_case_id": case_id, "updated_at": now}
+        if (work.physical_progress_pct is not None and work.physical_progress_pct >= 100) and work.status not in (WorkStatus.COMPLETED, WorkStatus.CANCELLED):
+            update_dict["status"] = WorkStatus.UNDER_VERIFICATION.value
+            if not work.actual_completion_date:
+                update_dict["actual_completion_date"] = now
         await self._collection.update_one(
             {"work_id": work_id},
             {"$set": update_dict, "$push": {"timeline": timeline_event.model_dump()}}
