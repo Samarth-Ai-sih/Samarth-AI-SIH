@@ -952,39 +952,7 @@ Without machine learning and algorithmic intelligence, monitoring MPLADS reduces
 
 ---
 
-## 38. Judge Evaluation Demo Workflow (5-Minute Walkthrough)
-
-Evaluators testing the live deployment (`https://13-203-65-170.sslip.io`) can execute this structured verification pathway:
-
-1. **Step 1: Open Public Transparency Portal**
-   * Visit `/public` (No credentials required).
-   * Observe public constituency project map, fund utilization percentages, and citizen social audit search.
-2. **Step 2: Authenticate as District Authority**
-   * Log in via `/login` as District Authority.
-   * Observe the **Executive Risk Command Center**: works automatically triaged into Red, Amber, and Green tiers.
-3. **Step 3: Inspect an Explainable High-Risk Work**
-   * Select a Red-Tier work (e.g. `Score: 78/100`).
-   * Review the **SHAP Explanation Card**: note explicit reasons (e.g. `+30: Geo-overlap within 250m`, `+25: 80% funds released with 15% progress`).
-4. **Step 4: Explore Duplicate Candidate Pairing**
-   * Navigate to `/dashboard/duplicates`.
-   * Open a detected duplicate match to view side-by-side split-screen comparison and distance calculations.
-5. **Step 5: Verify Field Evidence Forensics**
-   * Open `/dashboard/evidence` to view the cryptographic verification card: EXIF camera hardware tags, 500m geofence status, and perceptual hash similarity score.
-6. **Step 6: Execute Human Decision & Check Audit Log**
-   * Issue a milestone approval or show-cause inquiry.
-   * Observe that the action generates an immutable record capturing user identity, timestamp, and action justification.
-
----
-
-## 39. Judge Quick Read (60-Second Executive Summary)
-
-> **SAMARTH AI** is an explainable risk intelligence platform developed for the Smart India Hackathon to safeguard the multi-crore national MPLADS outlay. Moving beyond passive dashboards, the platform automatically ingests project data, screens for policy violations, and computes a versioned 0–100 risk score using **XGBoost** and **Isolation Forest**, explained transparently through **SHAP** attributions. 
->
-> To eliminate ghost assets and false progress claims, SAMARTH AI integrates **500-meter site geofencing** and **perceptual image hashing (pHash)** to catch recycled inspection photos. Operating under strict **Human-in-the-Loop** governance, the AI advises while District Magistrates decide. Tested across 18 comprehensive test suites and deployed live on **AWS EC2 with Docker and SSL**, SAMARTH AI represents a feasible, economically sustainable, and scalable blueprint for next-generation GovTech accountability in India.
-
----
-
-## 40. Frequently Asked Questions (Jury Defense Q&A)
+## 38. Frequently Asked Questions
 
 <details>
 <summary><b>1. Why not use a standard BI dashboard like PowerBI or Tableau?</b></summary>
@@ -1078,7 +1046,7 @@ Phase 1 (Months 1–4): Pilot deployment in two parliamentary constituencies wit
 
 ---
 
-## 41. Truthful Implementation Status Matrix
+## 39. Truthful Implementation Status Matrix
 
 | Component / Subsystem | Status | Concrete Repository Evidence |
 | :--- | :---: | :--- |
@@ -1103,7 +1071,7 @@ Phase 1 (Months 1–4): Pilot deployment in two parliamentary constituencies wit
 
 ---
 
-## 42. Contributing & Development Standards
+## 40. Contributing & Development Standards
 
 1. **Branching Strategy:** Feature branches branched off `main` (`feature/<feature-name>`); pull requests require passing backend pytest and frontend lint/build checks.
 2. **Code Standards:** 
@@ -1113,13 +1081,13 @@ Phase 1 (Months 1–4): Pilot deployment in two parliamentary constituencies wit
 
 ---
 
-## 43. License
+## 41. License
 
 This project is developed as a prototype for the **Smart India Hackathon 2026** under Problem Statement **SIH26102**. All rights reserved by **Team Parallaxes**.
 
 ---
 
-## 44. Team
+## 42. Team
 
 **Team Parallaxes** — Smart India Hackathon 2026
 
@@ -1127,7 +1095,7 @@ This project is developed as a prototype for the **Smart India Hackathon 2026** 
 
 ---
 
-## 45. Final Project Summary
+## 43. Final Project Summary
 
 > **SAMARTH AI is not just another government dashboard.**
 >
