@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1D4ED8" />
+      <stop offset="50%" stop-color="#4338CA" />
+      <stop offset="100%" stop-color="#1E1B4B" />
+    </linearGradient>
+  </defs>
+  <!-- Background rounded squircle -->
+  <rect width="64" height="64" rx="16" fill="url(#bg)" />
+  
+  <!-- Tricolor corner dots -->
+  <circle cx="8" cy="8" r="3" fill="#F59E0B" />
+  <circle cx="56" cy="56" r="3" fill="#10B981" />
+
+  <!-- Outer Ring with spoke notches -->
+  <circle cx="32" cy="32" r="24" stroke="#93C5FD" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="3 3" fill="none" />
+  
+  <!-- Inner Chakra Ring -->
+  <circle cx="32" cy="32" r="18" stroke="#FFFFFF" stroke-width="1.5" stroke-opacity="0.7" fill="none" />
+
+  <!-- 8 Radial Spokes -->
+  <line x1="32" y1="14" x2="32" y2="19" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+  <line x1="32" y1="45" x2="32" y2="50" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+  <line x1="14" y1="32" x2="19" y2="32" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+  <line x1="45" y1="32" x2="50" y2="32" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" />
+  <line x1="19" y1="19" x2="23" y2="23" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="41" y1="41" x2="45" y2="45" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="45" y1="19" x2="41" y2="23" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+  <line x1="19" y1="45" x2="23" y2="41" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" />
+
+  <!-- Stylized 'S' Monogram -->
+  <path d="M37 24C36.3 22.5 34.6 21.8 32.2 21.8C28.6 21.8 26 23.8 26 26.5C26 31.2 38 30.3 38 36C38 39.2 35.2 41.8 31.2 41.8C27.8 41.8 25.8 40.2 24.8 38.2M30 22.5L34 22.5M28 41.8L33 41.8" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+
+  <!-- AI Connectivity Nodes -->
+  <circle cx="37" cy="24" r="2.5" fill="#38BDF8" />
+  <circle cx="26" cy="38" r="2.5" fill="#34D399" />
+</svg>

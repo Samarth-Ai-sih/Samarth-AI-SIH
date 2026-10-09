@@ -7,6 +7,14 @@ export const metadata: Metadata = {
   title: "SAMARTH AI — MPLADS Risk Intelligence",
   description:
     "Detect Early. Verify on Ground. Deliver Public Assets on Time.",
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico" },
+    ],
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
